@@ -401,8 +401,18 @@ async function loadCourseAssignmentsView(courseId) {
     
     const assignments = await response.json();
     
-    // Filter assignments with ungraded submissions
-    const ungradedAssignments = assignments.filter(a => a.needs_grading_count > 0);
+    // Filter assignments with ungraded submissions and exclude quizzes
+    const ungradedAssignments = assignments.filter(a => {
+      // Check if it has ungraded submissions
+      if (a.needs_grading_count <= 0) return false;
+      
+      // Exclude quizzes (online_quiz or none submission types)
+      const isQuiz = a.submission_types && 
+                     (a.submission_types.includes('online_quiz') || 
+                      a.submission_types.includes('none'));
+      
+      return !isQuiz; // Only include non-quiz assignments
+    });
     
     if (ungradedAssignments.length === 0) {
       assignmentsList.innerHTML = `
@@ -451,11 +461,6 @@ function createAssignmentCard(assignment, courseId) {
   // Escape assignment name for onclick
   const escapedName = assignment.name.replace(/'/g, "\\'").replace(/"/g, '\\"');
   
-  // Check if assignment is a quiz
-  const isQuiz = assignment.submission_types && 
-                 (assignment.submission_types.includes('online_quiz') || 
-                  assignment.submission_types.includes('none'));
-  
   card.innerHTML = `
     <div class="assignment-header">
       <div class="assignment-info">
@@ -476,10 +481,9 @@ function createAssignmentCard(assignment, courseId) {
     <div class="assignment-footer">
       <div class="assignment-due">${dueText}</div>
       <div class="assignment-actions">
-        ${isQuiz ? 
-          '<button class="assignment-action-btn disabled" disabled title="Grading disabled for quizzes">Quiz - No Grading</button>' :
-          `<button class="assignment-action-btn" onclick="startGrading(${courseId}, ${assignment.id}, '${escapedName}')">Start Grading</button>`
-        }
+        <button class="assignment-action-btn" onclick="startGrading(${courseId}, ${assignment.id}, '${escapedName}')">
+          Start Grading
+        </button>
       </div>
     </div>
   `;
