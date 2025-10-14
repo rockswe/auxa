@@ -21,6 +21,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize rubrics
   initRubrics();
   
+  // Initialize assignments view
+  initAssignmentsView();
+  
   // Load courses
   loadCourses();
 });
@@ -57,6 +60,158 @@ function initSettings() {
       window.location.href = 'index.html';
     }
   });
+  
+  // AI Platform settings
+  initAISettings();
+}
+
+// Initialize AI platform settings
+function initAISettings() {
+  const platformSelect = document.getElementById('ai-platform-select');
+  const apiKeySection = document.getElementById('api-key-section');
+  const apiKeyInput = document.getElementById('ai-api-key');
+  const saveBtn = document.getElementById('save-ai-settings');
+  
+  // Load saved AI settings
+  const savedPlatform = localStorage.getItem('aiPlatform');
+  const savedApiKey = localStorage.getItem('aiApiKey');
+  
+  if (savedPlatform) {
+    platformSelect.value = savedPlatform;
+    apiKeySection.style.display = 'block';
+    saveBtn.style.display = 'block';
+    
+    // Show platform info
+    showPlatformInfo(savedPlatform);
+    
+    if (savedApiKey) {
+      apiKeyInput.value = '••••••••••••••••';
+      apiKeyInput.setAttribute('data-has-key', 'true');
+    }
+  }
+  
+  // Platform selection handler
+  platformSelect.addEventListener('change', (e) => {
+    const platform = e.target.value;
+    
+    if (platform) {
+      apiKeySection.style.display = 'block';
+      saveBtn.style.display = 'block';
+      apiKeyInput.value = '';
+      apiKeyInput.removeAttribute('data-has-key');
+      
+      // Show platform-specific warnings/info
+      showPlatformInfo(platform);
+    } else {
+      apiKeySection.style.display = 'none';
+      saveBtn.style.display = 'none';
+      document.getElementById('platform-warning').style.display = 'none';
+    }
+  });
+  
+  // API key input - clear placeholder when typing
+  apiKeyInput.addEventListener('focus', () => {
+    if (apiKeyInput.getAttribute('data-has-key') === 'true') {
+      apiKeyInput.value = '';
+      apiKeyInput.removeAttribute('data-has-key');
+    }
+  });
+  
+  // Save AI settings
+  saveBtn.addEventListener('click', async () => {
+    const platform = platformSelect.value;
+    const apiKey = apiKeyInput.value.trim();
+    
+    if (!platform) {
+      alert('Please select an AI platform');
+      return;
+    }
+    
+    // If no new key entered and we have an existing key, keep it
+    if (!apiKey && apiKeyInput.getAttribute('data-has-key') === 'true') {
+      alert('AI platform updated (API key unchanged)');
+      localStorage.setItem('aiPlatform', platform);
+      return;
+    }
+    
+    if (!apiKey) {
+      alert('Please enter your API key');
+      return;
+    }
+    
+    // Validate API key format based on platform
+    if (!validateApiKey(platform, apiKey)) {
+      alert('Invalid API key format for ' + getPlatformName(platform));
+      return;
+    }
+    
+    // Save to localStorage (in production, use secure storage like Canvas credentials)
+    localStorage.setItem('aiPlatform', platform);
+    localStorage.setItem('aiApiKey', apiKey);
+    
+    // Update UI
+    apiKeyInput.value = '••••••••••••••••';
+    apiKeyInput.setAttribute('data-has-key', 'true');
+    
+    alert('AI settings saved successfully!\n\nPlatform: ' + getPlatformName(platform));
+  });
+}
+
+// Validate API key format
+function validateApiKey(platform, key) {
+  if (!key) return false;
+  
+  switch(platform) {
+    case 'openai':
+      return key.startsWith('sk-');
+    case 'anthropic':
+      return key.startsWith('sk-ant-');
+    case 'google':
+      return key.length > 20; // Basic validation for Google API keys
+    default:
+      return false;
+  }
+}
+
+// Get platform display name
+function getPlatformName(platform) {
+  const names = {
+    'openai': 'OpenAI',
+    'anthropic': 'Anthropic (Claude)',
+    'google': 'Google (Gemini)'
+  };
+  return names[platform] || platform;
+}
+
+// Show platform-specific information/warnings
+function showPlatformInfo(platform) {
+  const warningContainer = document.getElementById('platform-warning');
+  const anthropicWarning = document.getElementById('anthropic-warning');
+  const openaiInfo = document.getElementById('openai-info');
+  const googleInfo = document.getElementById('google-info');
+  
+  // Hide all first
+  anthropicWarning.style.display = 'none';
+  openaiInfo.style.display = 'none';
+  googleInfo.style.display = 'none';
+  
+  // Show appropriate one
+  switch(platform) {
+    case 'anthropic':
+      warningContainer.style.display = 'block';
+      anthropicWarning.style.display = 'block';
+      break;
+    case 'openai':
+      warningContainer.style.display = 'block';
+      openaiInfo.style.display = 'block';
+      break;
+    case 'google':
+      warningContainer.style.display = 'block';
+      googleInfo.style.display = 'block';
+      break;
+    default:
+      warningContainer.style.display = 'none';
+  }
 }
 
 // Load courses from Canvas API via backend
@@ -171,10 +326,142 @@ function createCourseCard(course) {
   return card;
 }
 
-// Open course details (placeholder)
-function openCourse(course) {
+// Open course details - show assignments with ungraded submissions
+async function openCourse(course) {
   console.log('Opening course:', course);
-  alert(`Course: ${course.name}\n\nThis will open the assignment list for grading.\n(To be implemented)`);
+  
+  // Switch to assignments view
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('assignments-view').classList.add('active');
+  
+  // Update header
+  document.getElementById('assignment-course-title').textContent = course.name;
+  document.getElementById('assignment-course-subtitle').textContent = `${course.code} - Assignments with ungraded submissions`;
+  
+  // Load assignments
+  await loadCourseAssignmentsView(course.id);
+}
+
+// Initialize assignments view
+function initAssignmentsView() {
+  const backBtn = document.getElementById('back-to-courses');
+  
+  backBtn.addEventListener('click', () => {
+    // Switch back to courses view
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('courses-view').classList.add('active');
+  });
+}
+
+// Load assignments for a course (only those with ungraded submissions)
+async function loadCourseAssignmentsView(courseId) {
+  const assignmentsList = document.getElementById('assignments-list');
+  assignmentsList.innerHTML = '<div class="loading-message"><p>Loading assignments...</p></div>';
+  
+  try {
+    // Fetch assignments
+    const response = await fetch(`http://localhost:3000/api/courses/${courseId}/assignments`, {
+      headers: {
+        'Authorization': userCredentials.token,
+        'X-School-URL': userCredentials.school
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch assignments');
+    }
+    
+    const assignments = await response.json();
+    
+    // Filter assignments with ungraded submissions
+    const ungradedAssignments = assignments.filter(a => a.needs_grading_count > 0);
+    
+    if (ungradedAssignments.length === 0) {
+      assignmentsList.innerHTML = `
+        <div class="empty-message">
+          <p>No assignments with ungraded submissions</p>
+          <p style="font-size: 14px; color: #888; margin-top: 8px;">All caught up! 🎉</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Display assignments
+    assignmentsList.innerHTML = '';
+    ungradedAssignments.forEach(assignment => {
+      const assignmentCard = createAssignmentCard(assignment, courseId);
+      assignmentsList.appendChild(assignmentCard);
+    });
+    
+  } catch (error) {
+    console.error('Error loading assignments:', error);
+    assignmentsList.innerHTML = `
+      <div class="empty-message">
+        <p>Failed to load assignments</p>
+        <p style="font-size: 14px; color: #888; margin-top: 8px;">Please try again</p>
+      </div>
+    `;
+  }
+}
+
+// Create assignment card element
+function createAssignmentCard(assignment, courseId) {
+  const card = document.createElement('div');
+  card.className = 'assignment-card';
+  
+  // Format due date
+  let dueText = 'No due date';
+  if (assignment.due_at) {
+    const dueDate = new Date(assignment.due_at);
+    const now = new Date();
+    const isPast = dueDate < now;
+    dueText = isPast ? 
+      `Due: ${dueDate.toLocaleDateString()} (past due)` : 
+      `Due: ${dueDate.toLocaleDateString()}`;
+  }
+  
+  card.innerHTML = `
+    <div class="assignment-header">
+      <div class="assignment-info">
+        <div class="assignment-name">${assignment.name}</div>
+        <div class="assignment-meta">
+          <div class="assignment-meta-item">
+            <span>Points: ${assignment.points_possible || 0}</span>
+          </div>
+          <div class="assignment-meta-item">
+            <span>Type: ${formatSubmissionType(assignment.submission_types)}</span>
+          </div>
+        </div>
+      </div>
+      <div class="assignment-badge ${assignment.needs_grading_count > 10 ? 'warning' : ''}">
+        ${assignment.needs_grading_count}
+      </div>
+    </div>
+    <div class="assignment-footer">
+      <div class="assignment-due">${dueText}</div>
+      <div class="assignment-actions">
+        <button class="assignment-action-btn" onclick="startGrading(${courseId}, ${assignment.id})">
+          Start Grading
+        </button>
+      </div>
+    </div>
+  `;
+  
+  return card;
+}
+
+// Format submission types for display
+function formatSubmissionType(types) {
+  if (!types || types.length === 0) return 'Unknown';
+  if (types.includes('online_text_entry')) return 'Text';
+  if (types.includes('online_upload')) return 'File Upload';
+  if (types.includes('online_url')) return 'URL';
+  return types[0].replace('online_', '').replace('_', ' ');
+}
+
+// Start grading (placeholder)
+function startGrading(courseId, assignmentId) {
+  alert(`Start grading flow for assignment ${assignmentId} in course ${courseId}\n\nThis will load submissions for grading.\n(To be implemented)`);
 }
 
 // ========== RUBRICS FUNCTIONALITY ==========

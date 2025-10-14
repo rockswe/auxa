@@ -40,6 +40,22 @@
         </div>
       </div>
 
+      <!-- Assignments View (shown when course is clicked) -->
+      <div id="assignments-view" class="view">
+        <div class="view-header">
+          <button class="back-btn" id="back-to-courses">← Back to Courses</button>
+          <h2 class="view-title" id="assignment-course-title">Course Assignments</h2>
+          <p class="view-subtitle" id="assignment-course-subtitle">Assignments with ungraded submissions</p>
+        </div>
+        
+        <div id="assignments-list" class="assignments-container">
+          <!-- Assignments will be loaded here -->
+          <div class="loading-message">
+            <p>Loading assignments...</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Rubrics View -->
       <div id="rubrics-view" class="view">
         <div class="view-header">
@@ -121,15 +137,83 @@
         </div>
         
         <div class="settings-content">
-          <div class="setting-item">
-            <label>Canvas Access Token</label>
-            <input type="password" id="settings-token" class="setting-input" readonly />
+          <div class="settings-section">
+            <h3 class="settings-section-title">Canvas LMS</h3>
+            
+            <div class="setting-item">
+              <label>Canvas Access Token</label>
+              <input type="password" id="settings-token" class="setting-input" readonly />
+            </div>
+            <div class="setting-item">
+              <label>School Canvas URL</label>
+              <input type="text" id="settings-school" class="setting-input" readonly />
+            </div>
+            <button class="disconnect-btn">Disconnect from Canvas</button>
           </div>
-          <div class="setting-item">
-            <label>School Canvas URL</label>
-            <input type="text" id="settings-school" class="setting-input" readonly />
+
+          <div class="settings-divider"></div>
+
+          <div class="settings-section">
+            <h3 class="settings-section-title">AI Platform</h3>
+            
+            <div class="setting-item">
+              <label for="ai-platform-select">Choose AI Platform</label>
+              <select id="ai-platform-select" class="setting-select">
+                <option value="">Select platform...</option>
+                <option value="openai">OpenAI (ChatGPT)</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="google">Google (Gemini)</option>
+              </select>
+            </div>
+
+            <!-- Platform-specific warnings -->
+            <div id="platform-warning" class="platform-warning" style="display: none;">
+              <div id="anthropic-warning" class="warning-box" style="display: none;">
+                <strong>⚠️ Limited Support - Audio/Video Not Supported</strong>
+                <p><strong>Supported formats:</strong></p>
+                <ul>
+                  <li><strong>Documents:</strong> .PDF, .DOCX, .PPTX, .TXT, .MD, .TEX, .XLSX, .CSV, .JSON</li>
+                  <li><strong>Code:</strong> .PY, .JS, .GO, .C, .CPP, .JAVA, .ipynb, and other programming files</li>
+                  <li><strong>Images:</strong> .PNG, .JPG, .JPEG, .GIF, .WEBP</li>
+                </ul>
+                <p><strong>⚠️ NOT supported:</strong></p>
+                <ul>
+                  <li><strong>Audio/Video:</strong> .MP3, .MP4, .MPEG, .MPGA, .M4A, .WAV, .WEBM</li>
+                </ul>
+                <p>Anthropic's Claude cannot process audio/video files. For audio/video grading, use OpenAI or Google Gemini.</p>
+              </div>
+              
+              <div id="openai-info" class="info-box" style="display: none;">
+                <strong>✓ Full Support - All Formats</strong>
+                <p><strong>Supported formats:</strong></p>
+                <ul>
+                  <li><strong>Documents:</strong> .PDF, .DOCX, .PPTX, .TXT, .MD, .TEX, .XLSX, .CSV, .JSON</li>
+                  <li><strong>Code:</strong> .PY, .JS, .GO, .C, .CPP, .JAVA, .ipynb, and other programming files</li>
+                  <li><strong>Images:</strong> .PNG, .JPG, .JPEG, .GIF, .WEBP</li>
+                  <li><strong>Audio/Video:</strong> .MP3, .MP4, .MPEG, .MPGA, .M4A, .WAV, .WEBM (via Whisper API)</li>
+                </ul>
+              </div>
+
+              <div id="google-info" class="info-box" style="display: none;">
+                <strong>✓ Full Support - All Formats</strong>
+                <p><strong>Supported formats:</strong></p>
+                <ul>
+                  <li><strong>Documents:</strong> .PDF, .DOCX, .PPTX, .TXT, .MD, .TEX, .XLSX, .CSV, .JSON</li>
+                  <li><strong>Code:</strong> .PY, .JS, .GO, .C, .CPP, .JAVA, .ipynb, and other programming files</li>
+                  <li><strong>Images:</strong> .PNG, .JPG, .JPEG, .GIF, .WEBP</li>
+                  <li><strong>Audio/Video:</strong> .MP3, .MP4, .MPEG, .MPGA, .M4A, .WAV, .WEBM</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div class="setting-item" id="api-key-section" style="display: none;">
+              <label for="ai-api-key">API Key</label>
+              <input type="password" id="ai-api-key" class="setting-input" placeholder="Enter your API key" />
+              <span class="setting-help">Your API key is stored securely and encrypted</span>
+            </div>
+            
+            <button class="save-ai-btn" id="save-ai-settings" style="display: none;">Save AI Settings</button>
           </div>
-          <button class="disconnect-btn">Disconnect</button>
         </div>
       </div>
     </main>

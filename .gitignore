@@ -16,3 +16,8 @@ backend/vendor/
 # Encrypted credentials
 credentials.enc
 
+# API keys (localStorage backup)
+*.key
+*apikey*
+*api-key*
+
