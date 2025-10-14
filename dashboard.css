@@ -337,6 +337,21 @@ body {
   background: #fafafa;
 }
 
+.assignment-action-btn.disabled,
+.assignment-action-btn:disabled {
+  background: #e0e0e0;
+  color: #999;
+  border-color: #e0e0e0;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.assignment-action-btn.disabled:hover,
+.assignment-action-btn:disabled:hover {
+  background: #e0e0e0;
+  transform: none;
+}
+
 /* Rubrics */
 .rubrics-content {
   max-width: 800px;

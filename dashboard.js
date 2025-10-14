@@ -451,6 +451,11 @@ function createAssignmentCard(assignment, courseId) {
   // Escape assignment name for onclick
   const escapedName = assignment.name.replace(/'/g, "\\'").replace(/"/g, '\\"');
   
+  // Check if assignment is a quiz
+  const isQuiz = assignment.submission_types && 
+                 (assignment.submission_types.includes('online_quiz') || 
+                  assignment.submission_types.includes('none'));
+  
   card.innerHTML = `
     <div class="assignment-header">
       <div class="assignment-info">
@@ -471,9 +476,10 @@ function createAssignmentCard(assignment, courseId) {
     <div class="assignment-footer">
       <div class="assignment-due">${dueText}</div>
       <div class="assignment-actions">
-        <button class="assignment-action-btn" onclick="startGrading(${courseId}, ${assignment.id}, '${escapedName}')">
-          Start Grading
-        </button>
+        ${isQuiz ? 
+          '<button class="assignment-action-btn disabled" disabled title="Grading disabled for quizzes">Quiz - No Grading</button>' :
+          `<button class="assignment-action-btn" onclick="startGrading(${courseId}, ${assignment.id}, '${escapedName}')">Start Grading</button>`
+        }
       </div>
     </div>
   `;
@@ -484,6 +490,8 @@ function createAssignmentCard(assignment, courseId) {
 // Format submission types for display
 function formatSubmissionType(types) {
   if (!types || types.length === 0) return 'Unknown';
+  if (types.includes('online_quiz')) return 'Quiz';
+  if (types.includes('none')) return 'Quiz';
   if (types.includes('online_text_entry')) return 'Text';
   if (types.includes('online_upload')) return 'File Upload';
   if (types.includes('online_url')) return 'URL';
