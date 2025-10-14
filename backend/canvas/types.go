@@ -67,10 +67,13 @@ type Submission struct {
 	GraderID           int                 `json:"grader_id"`
 	GradedAt           *time.Time          `json:"graded_at"`
 	WorkflowState      string              `json:"workflow_state"`  // "submitted", "unsubmitted", "graded", etc.
-	SubmissionType     string              `json:"submission_type"` // "online_text_entry", "online_upload", etc.
+	SubmissionType     string              `json:"submission_type"` // "online_text_entry", "online_upload", "media_recording", etc.
 	Body               string              `json:"body"`            // For text submissions
 	URL                string              `json:"url"`             // For URL submissions
+	PreviewURL         string              `json:"preview_url"`     // Preview URL
+	HTMLURL            string              `json:"html_url"`        // HTML URL to view submission
 	Attachments        []Attachment        `json:"attachments"`
+	MediaComment       *MediaComment       `json:"media_comment"` // For audio/video recordings
 	Attempt            int                 `json:"attempt"`
 	Late               bool                `json:"late"`
 	Missing            bool                `json:"missing"`
@@ -86,6 +89,16 @@ type Attachment struct {
 	ContentType string `json:"content-type"`
 	URL         string `json:"url"`
 	Size        int64  `json:"size"`
+	PreviewURL  string `json:"preview_url"`
+}
+
+// MediaComment represents an audio/video recording submission
+type MediaComment struct {
+	ContentType string `json:"content-type"`
+	DisplayName string `json:"display_name"`
+	MediaID     string `json:"media_id"`
+	MediaType   string `json:"media_type"` // "audio" or "video"
+	URL         string `json:"url"`
 }
 
 // SubmissionComment represents a comment on a submission

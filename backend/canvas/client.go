@@ -133,6 +133,7 @@ func (c *Client) GetAssignmentSubmissions(courseID, assignmentID string) ([]Subm
 	params.Add("include[]", "rubric_assessment")
 	params.Add("include[]", "assignment")
 	params.Add("include[]", "user")
+	params.Add("include[]", "visibility")
 	params.Add("per_page", "100")
 
 	endpoint := fmt.Sprintf("/courses/%s/assignments/%s/submissions", courseID, assignmentID)

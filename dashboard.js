@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize assignments view
   initAssignmentsView();
   
+  // Initialize submissions view
+  initSubmissionsView();
+  
   // Load courses
   loadCourses();
 });
@@ -367,6 +370,17 @@ function initAssignmentsView() {
   });
 }
 
+// Initialize submissions view
+function initSubmissionsView() {
+  const backBtn = document.getElementById('back-to-assignments');
+  
+  backBtn.addEventListener('click', () => {
+    // Switch back to assignments view
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('assignments-view').classList.add('active');
+  });
+}
+
 // Load assignments for a course (only those with ungraded submissions)
 async function loadCourseAssignmentsView(courseId) {
   const assignmentsList = document.getElementById('assignments-list');
@@ -434,6 +448,9 @@ function createAssignmentCard(assignment, courseId) {
       `Due: ${dueDate.toLocaleDateString()}`;
   }
   
+  // Escape assignment name for onclick
+  const escapedName = assignment.name.replace(/'/g, "\\'").replace(/"/g, '\\"');
+  
   card.innerHTML = `
     <div class="assignment-header">
       <div class="assignment-info">
@@ -454,7 +471,7 @@ function createAssignmentCard(assignment, courseId) {
     <div class="assignment-footer">
       <div class="assignment-due">${dueText}</div>
       <div class="assignment-actions">
-        <button class="assignment-action-btn" onclick="startGrading(${courseId}, ${assignment.id})">
+        <button class="assignment-action-btn" onclick="startGrading(${courseId}, ${assignment.id}, '${escapedName}')">
           Start Grading
         </button>
       </div>
@@ -473,9 +490,205 @@ function formatSubmissionType(types) {
   return types[0].replace('online_', '').replace('_', ' ');
 }
 
-// Start grading (placeholder)
-function startGrading(courseId, assignmentId) {
-  alert(`Start grading flow for assignment ${assignmentId} in course ${courseId}\n\nThis will load submissions for grading.\n(To be implemented)`);
+// Start grading - load submissions for an assignment
+async function startGrading(courseId, assignmentId, assignmentName) {
+  console.log('Starting grading for assignment:', assignmentId, 'in course:', courseId);
+  
+  // Switch to submissions view
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('submissions-view').classList.add('active');
+  
+  // Update header
+  document.getElementById('submissions-assignment-title').textContent = assignmentName || 'Assignment Submissions';
+  document.getElementById('submissions-assignment-subtitle').textContent = 'Review and grade ungraded submissions';
+  
+  // Load submissions
+  await loadSubmissionsView(courseId, assignmentId);
+}
+
+// Load submissions for an assignment
+async function loadSubmissionsView(courseId, assignmentId) {
+  const submissionsList = document.getElementById('submissions-list');
+  submissionsList.innerHTML = '<div class="loading-message"><p>Loading submissions...</p></div>';
+  
+  try {
+    // Fetch ungraded submissions
+    const response = await fetch(`http://localhost:3000/api/courses/${courseId}/assignments/${assignmentId}/ungraded`, {
+      headers: {
+        'Authorization': userCredentials.token,
+        'X-School-URL': userCredentials.school
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch submissions');
+    }
+    
+    const submissions = await response.json();
+    
+    if (submissions.length === 0) {
+      submissionsList.innerHTML = `
+        <div class="empty-message">
+          <p>No ungraded submissions</p>
+          <p style="font-size: 14px; color: #888; margin-top: 8px;">All submissions have been graded! 🎉</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Display submissions
+    submissionsList.innerHTML = '';
+    submissions.forEach(submission => {
+      const submissionCard = createSubmissionCard(submission, courseId, assignmentId);
+      submissionsList.appendChild(submissionCard);
+    });
+    
+  } catch (error) {
+    console.error('Error loading submissions:', error);
+    submissionsList.innerHTML = `
+      <div class="empty-message">
+        <p>Failed to load submissions</p>
+        <p style="font-size: 14px; color: #888; margin-top: 8px;">Please try again</p>
+      </div>
+    `;
+  }
+}
+
+// Create submission card element
+function createSubmissionCard(submission, courseId, assignmentId) {
+  const card = document.createElement('div');
+  card.className = 'submission-card';
+  
+  // Format submission date
+  let submittedText = 'Not submitted';
+  if (submission.submitted_at) {
+    const submittedDate = new Date(submission.submitted_at);
+    submittedText = `Submitted: ${submittedDate.toLocaleString()}`;
+  }
+  
+  // Get student info
+  const studentName = submission.user ? submission.user.name : 'Unknown Student';
+  const studentEmail = submission.user ? submission.user.email : '';
+  
+  // Determine submission content preview
+  const contentPreview = getSubmissionContentPreview(submission);
+  
+  card.innerHTML = `
+    <div class="submission-header">
+      <div class="submission-student-info">
+        <div class="submission-student-name">${studentName}</div>
+        <div class="submission-student-email">${studentEmail}</div>
+      </div>
+      <div class="submission-meta">
+        <span class="submission-status ${submission.late ? 'late' : ''}">${submission.late ? '⚠️ Late' : '✓ On Time'}</span>
+        ${submission.attempt > 1 ? `<span class="submission-attempt">Attempt ${submission.attempt}</span>` : ''}
+      </div>
+    </div>
+    <div class="submission-info">
+      <div class="submission-date">${submittedText}</div>
+      <div class="submission-type-badge">${formatSubmissionTypeBadge(submission.submission_type)}</div>
+    </div>
+    <div class="submission-content-preview">
+      ${contentPreview}
+    </div>
+    <div class="submission-actions">
+      <button class="submission-action-btn primary" onclick="gradeSubmission(${courseId}, ${assignmentId}, ${submission.id}, ${submission.user_id})">
+        Grade Submission
+      </button>
+      <button class="submission-action-btn secondary" onclick="viewSubmissionDetails(${JSON.stringify(submission).replace(/"/g, '&quot;')})">
+        View Details
+      </button>
+    </div>
+  `;
+  
+  return card;
+}
+
+// Get submission content preview based on type
+function getSubmissionContentPreview(submission) {
+  switch (submission.submission_type) {
+    case 'online_text_entry':
+      // Show text preview
+      const textPreview = submission.body ? 
+        submission.body.replace(/<[^>]*>/g, '').substring(0, 200) + '...' : 
+        'No content';
+      return `
+        <div class="content-preview-text">
+          <strong>Text Submission:</strong><br>
+          ${textPreview}
+        </div>
+      `;
+      
+    case 'online_upload':
+      // Show file attachments
+      if (submission.attachments && submission.attachments.length > 0) {
+        const fileList = submission.attachments.map(file => 
+          `<div class="attachment-item">📎 ${file.filename} (${formatFileSize(file.size)})</div>`
+        ).join('');
+        return `
+          <div class="content-preview-files">
+            <strong>Uploaded Files (${submission.attachments.length}):</strong><br>
+            ${fileList}
+          </div>
+        `;
+      }
+      return '<div class="content-preview-text">No files attached</div>';
+      
+    case 'media_recording':
+      // Show media recording info
+      if (submission.media_comment) {
+        const mediaType = submission.media_comment.media_type || 'media';
+        return `
+          <div class="content-preview-media">
+            <strong>${mediaType === 'video' ? '🎥' : '🎵'} ${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)} Recording</strong><br>
+            ${submission.media_comment.display_name || 'Media file'}
+          </div>
+        `;
+      }
+      return '<div class="content-preview-text">Media recording</div>';
+      
+    case 'online_url':
+      // Show URL
+      return `
+        <div class="content-preview-url">
+          <strong>URL Submission:</strong><br>
+          <a href="${submission.url}" target="_blank">${submission.url}</a>
+        </div>
+      `;
+      
+    default:
+      return `<div class="content-preview-text">Submission type: ${submission.submission_type}</div>`;
+  }
+}
+
+// Format submission type as badge
+function formatSubmissionTypeBadge(type) {
+  const typeMap = {
+    'online_text_entry': '📝 Text Entry',
+    'online_upload': '📁 File Upload',
+    'media_recording': '🎥 Media Recording',
+    'online_url': '🔗 URL Submission'
+  };
+  return typeMap[type] || type;
+}
+
+// Format file size
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+// Grade submission (placeholder for now)
+function gradeSubmission(courseId, assignmentId, submissionId, userId) {
+  alert(`Grade submission ${submissionId} for user ${userId}\n\nThis will open the AI grading interface.\n(To be implemented)`);
+}
+
+// View submission details (placeholder for now)
+function viewSubmissionDetails(submission) {
+  alert(`View details for submission\n\nStudent: ${submission.user ? submission.user.name : 'Unknown'}\nType: ${submission.submission_type}\n\n(Detailed view to be implemented)`);
 }
 
 // Get system prompt for AI grading
