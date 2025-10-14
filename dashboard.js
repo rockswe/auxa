@@ -70,15 +70,19 @@ function initAISettings() {
   const platformSelect = document.getElementById('ai-platform-select');
   const apiKeySection = document.getElementById('api-key-section');
   const apiKeyInput = document.getElementById('ai-api-key');
+  const systemPromptSection = document.getElementById('system-prompt-section');
+  const systemPromptInput = document.getElementById('ai-system-prompt');
   const saveBtn = document.getElementById('save-ai-settings');
   
   // Load saved AI settings
   const savedPlatform = localStorage.getItem('aiPlatform');
   const savedApiKey = localStorage.getItem('aiApiKey');
+  const savedSystemPrompt = localStorage.getItem('aiSystemPrompt');
   
   if (savedPlatform) {
     platformSelect.value = savedPlatform;
     apiKeySection.style.display = 'block';
+    systemPromptSection.style.display = 'block';
     saveBtn.style.display = 'block';
     
     // Show platform info
@@ -88,6 +92,10 @@ function initAISettings() {
       apiKeyInput.value = '••••••••••••••••';
       apiKeyInput.setAttribute('data-has-key', 'true');
     }
+    
+    if (savedSystemPrompt) {
+      systemPromptInput.value = savedSystemPrompt;
+    }
   }
   
   // Platform selection handler
@@ -96,6 +104,7 @@ function initAISettings() {
     
     if (platform) {
       apiKeySection.style.display = 'block';
+      systemPromptSection.style.display = 'block';
       saveBtn.style.display = 'block';
       apiKeyInput.value = '';
       apiKeyInput.removeAttribute('data-has-key');
@@ -104,6 +113,7 @@ function initAISettings() {
       showPlatformInfo(platform);
     } else {
       apiKeySection.style.display = 'none';
+      systemPromptSection.style.display = 'none';
       saveBtn.style.display = 'none';
       document.getElementById('platform-warning').style.display = 'none';
     }
@@ -121,6 +131,7 @@ function initAISettings() {
   saveBtn.addEventListener('click', async () => {
     const platform = platformSelect.value;
     const apiKey = apiKeyInput.value.trim();
+    const systemPrompt = systemPromptInput.value.trim();
     
     if (!platform) {
       alert('Please select an LLM API platform');
@@ -131,6 +142,7 @@ function initAISettings() {
     if (!apiKey && apiKeyInput.getAttribute('data-has-key') === 'true') {
       alert('LLM API platform updated (API key unchanged)');
       localStorage.setItem('aiPlatform', platform);
+      localStorage.setItem('aiSystemPrompt', systemPrompt);
       return;
     }
     
@@ -148,12 +160,14 @@ function initAISettings() {
     // Save to localStorage (in production, use secure storage like Canvas credentials)
     localStorage.setItem('aiPlatform', platform);
     localStorage.setItem('aiApiKey', apiKey);
+    localStorage.setItem('aiSystemPrompt', systemPrompt);
     
     // Update UI
     apiKeyInput.value = '••••••••••••••••';
     apiKeyInput.setAttribute('data-has-key', 'true');
     
-    alert('AI settings saved successfully!\n\nPlatform: ' + getPlatformName(platform));
+    alert('AI settings saved successfully!\n\nPlatform: ' + getPlatformName(platform) + 
+          (systemPrompt ? '\nCustom system prompt saved' : '\nUsing default system prompt'));
   });
 }
 
@@ -462,6 +476,20 @@ function formatSubmissionType(types) {
 // Start grading (placeholder)
 function startGrading(courseId, assignmentId) {
   alert(`Start grading flow for assignment ${assignmentId} in course ${courseId}\n\nThis will load submissions for grading.\n(To be implemented)`);
+}
+
+// Get system prompt for AI grading
+function getSystemPrompt() {
+  return localStorage.getItem('aiSystemPrompt') || '';
+}
+
+// Get AI configuration
+function getAIConfig() {
+  return {
+    platform: localStorage.getItem('aiPlatform') || null,
+    apiKey: localStorage.getItem('aiApiKey') || null,
+    systemPrompt: localStorage.getItem('aiSystemPrompt') || ''
+  };
 }
 
 // ========== RUBRICS FUNCTIONALITY ==========

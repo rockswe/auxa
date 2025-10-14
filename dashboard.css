@@ -625,14 +625,36 @@ body {
   transition: all 0.3s ease;
 }
 
+.setting-textarea {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 15px;
+  font-family: 'Forum', serif;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  outline: none;
+  background: #fafafa;
+  color: #333;
+  transition: all 0.3s ease;
+  resize: vertical;
+  min-height: 140px;
+  line-height: 1.6;
+}
+
 .setting-input:read-only {
   color: #666;
 }
 
 .setting-input:focus,
-.setting-select:focus {
+.setting-select:focus,
+.setting-textarea:focus {
   border-color: #000000;
   background: white;
+}
+
+.setting-textarea::placeholder {
+  color: #999;
+  line-height: 1.6;
 }
 
 .setting-help {
