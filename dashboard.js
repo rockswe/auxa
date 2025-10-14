@@ -957,16 +957,30 @@ async function renderPDFPage(rubricId, pageNumber) {
   const container = canvas.parentElement;
   const containerWidth = container.clientWidth;
   const viewport = page.getViewport({ scale: 1 });
-  const scale = Math.min((containerWidth - 40) / viewport.width, 1.5); // Max scale of 1.5, 20px margin on each side
+  const scale = Math.min((containerWidth - 40) / viewport.width, 2.0); // Max scale of 2.0, 20px margin on each side
   
   const scaledViewport = page.getViewport({ scale: scale });
   
-  canvas.width = scaledViewport.width;
-  canvas.height = scaledViewport.height;
+  // Account for device pixel ratio for high-DPI displays (Retina, etc.)
+  const outputScale = window.devicePixelRatio || 1;
+  
+  // Set canvas size accounting for pixel ratio
+  canvas.width = Math.floor(scaledViewport.width * outputScale);
+  canvas.height = Math.floor(scaledViewport.height * outputScale);
+  
+  // Set display size (CSS pixels)
+  canvas.style.width = Math.floor(scaledViewport.width) + 'px';
+  canvas.style.height = Math.floor(scaledViewport.height) + 'px';
+  
+  // Scale the context to account for the pixel ratio
+  const transform = outputScale !== 1 
+    ? [outputScale, 0, 0, outputScale, 0, 0] 
+    : null;
   
   const renderContext = {
     canvasContext: context,
-    viewport: scaledViewport
+    viewport: scaledViewport,
+    transform: transform
   };
   
   await page.render(renderContext).promise;
