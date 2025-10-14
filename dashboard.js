@@ -123,13 +123,13 @@ function initAISettings() {
     const apiKey = apiKeyInput.value.trim();
     
     if (!platform) {
-      alert('Please select an AI platform');
+      alert('Please select an LLM API platform');
       return;
     }
     
     // If no new key entered and we have an existing key, keep it
     if (!apiKey && apiKeyInput.getAttribute('data-has-key') === 'true') {
-      alert('AI platform updated (API key unchanged)');
+      alert('LLM API platform updated (API key unchanged)');
       localStorage.setItem('aiPlatform', platform);
       return;
     }
@@ -839,6 +839,9 @@ function loadSavedRubrics() {
           <div class="rubric-type">${rubric.type === 'text' ? 'Text' : 'File: ' + rubric.fileName}</div>
         </div>
       </div>
+      <div class="rubric-content-container">
+        ${renderRubricContent(rubric)}
+      </div>
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
         <div style="font-size: 12px; color: #aaa;">
           Created: ${new Date(rubric.createdAt).toLocaleString()}
@@ -851,7 +854,143 @@ function loadSavedRubrics() {
       </div>
     `;
     rubricsList.appendChild(rubricItem);
+    
+    // If it's a PDF file, render it after DOM insertion
+    if (rubric.type === 'file' && rubric.fileName && rubric.fileName.toLowerCase().endsWith('.pdf')) {
+      renderPDF(rubric.id, rubric.content);
+    }
   });
+}
+
+// Render rubric content based on type
+function renderRubricContent(rubric) {
+  if (rubric.type === 'text') {
+    // Display text content
+    return `
+      <div class="rubric-text-content">
+        ${rubric.content.replace(/\n/g, '<br>')}
+      </div>
+    `;
+  } else {
+    // Display file viewer
+    const isPDF = rubric.fileName && rubric.fileName.toLowerCase().endsWith('.pdf');
+    const isDOCX = rubric.fileName && (rubric.fileName.toLowerCase().endsWith('.docx') || rubric.fileName.toLowerCase().endsWith('.doc'));
+    
+    if (isPDF) {
+      return `
+        <div class="rubric-file-viewer">
+          <div class="pdf-controls">
+            <button class="pdf-nav-btn" onclick="changePDFPage(${rubric.id}, -1)">←</button>
+            <span class="pdf-page-info" id="page-info-${rubric.id}">Page 1 of 1</span>
+            <button class="pdf-nav-btn" onclick="changePDFPage(${rubric.id}, 1)">→</button>
+          </div>
+          <div class="pdf-container">
+            <canvas id="pdf-canvas-${rubric.id}" class="pdf-canvas"></canvas>
+          </div>
+        </div>
+      `;
+    } else if (isDOCX) {
+      return `
+        <div class="rubric-file-viewer">
+          <div class="file-preview-notice">
+            <p>📄 ${rubric.fileName}</p>
+            <p style="font-size: 12px; color: #888; margin-top: 8px;">DOCX preview not available - file stored</p>
+          </div>
+        </div>
+      `;
+    } else {
+      return `
+        <div class="rubric-file-viewer">
+          <div class="file-preview-notice">
+            <p>📄 ${rubric.fileName}</p>
+            <p style="font-size: 12px; color: #888; margin-top: 8px;">File stored successfully</p>
+          </div>
+        </div>
+      `;
+    }
+  }
+}
+
+// PDF rendering state
+const pdfStates = {};
+
+// Render PDF using PDF.js
+async function renderPDF(rubricId, dataUrl) {
+  try {
+    // Load PDF
+    const loadingTask = pdfjsLib.getDocument(dataUrl);
+    const pdf = await loadingTask.promise;
+    
+    // Store PDF state
+    pdfStates[rubricId] = {
+      pdf: pdf,
+      currentPage: 1,
+      totalPages: pdf.numPages
+    };
+    
+    // Update page info
+    document.getElementById(`page-info-${rubricId}`).textContent = `Page 1 of ${pdf.numPages}`;
+    
+    // Render first page
+    await renderPDFPage(rubricId, 1);
+  } catch (error) {
+    console.error('Error loading PDF:', error);
+    const canvas = document.getElementById(`pdf-canvas-${rubricId}`);
+    if (canvas) {
+      canvas.parentElement.innerHTML = '<p style="color: #f44336; text-align: center; padding: 20px;">Error loading PDF</p>';
+    }
+  }
+}
+
+// Render a specific page of a PDF
+async function renderPDFPage(rubricId, pageNumber) {
+  const state = pdfStates[rubricId];
+  if (!state) return;
+  
+  const page = await state.pdf.getPage(pageNumber);
+  const canvas = document.getElementById(`pdf-canvas-${rubricId}`);
+  if (!canvas) return;
+  
+  const context = canvas.getContext('2d');
+  
+  // Calculate scale to fit container nicely
+  const container = canvas.parentElement;
+  const containerWidth = container.clientWidth;
+  const viewport = page.getViewport({ scale: 1 });
+  const scale = Math.min((containerWidth - 40) / viewport.width, 1.5); // Max scale of 1.5, 20px margin on each side
+  
+  const scaledViewport = page.getViewport({ scale: scale });
+  
+  canvas.width = scaledViewport.width;
+  canvas.height = scaledViewport.height;
+  
+  const renderContext = {
+    canvasContext: context,
+    viewport: scaledViewport
+  };
+  
+  await page.render(renderContext).promise;
+}
+
+// Change PDF page
+async function changePDFPage(rubricId, delta) {
+  const state = pdfStates[rubricId];
+  if (!state) return;
+  
+  const newPage = state.currentPage + delta;
+  
+  // Check bounds
+  if (newPage < 1 || newPage > state.totalPages) {
+    return;
+  }
+  
+  state.currentPage = newPage;
+  
+  // Update page info
+  document.getElementById(`page-info-${rubricId}`).textContent = `Page ${newPage} of ${state.totalPages}`;
+  
+  // Render new page
+  await renderPDFPage(rubricId, newPage);
 }
 
 // Edit rubric

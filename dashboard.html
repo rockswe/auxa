@@ -8,6 +8,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Forum&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="dashboard.css">
+  <!-- PDF.js for PDF rendering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
 </head>
 <body>
   <div class="app-container">
@@ -154,10 +159,10 @@
           <div class="settings-divider"></div>
 
           <div class="settings-section">
-            <h3 class="settings-section-title">AI Platform</h3>
+            <h3 class="settings-section-title">LLM API Platform</h3>
             
             <div class="setting-item">
-              <label for="ai-platform-select">Choose AI Platform</label>
+              <label for="ai-platform-select">Choose LLM API Platform</label>
               <select id="ai-platform-select" class="setting-select">
                 <option value="">Select platform...</option>
                 <option value="openai">OpenAI (ChatGPT)</option>
