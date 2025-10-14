@@ -1,0 +1,594 @@
+// Dashboard logic for Auxa
+
+let userCredentials = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Check if user is logged in
+  userCredentials = await window.secureStorage.getCredentials();
+  
+  if (!userCredentials || !userCredentials.token || !userCredentials.school) {
+    // Redirect back to login if no credentials
+    window.location.href = 'index.html';
+    return;
+  }
+
+  // Initialize navigation
+  initNavigation();
+  
+  // Initialize settings
+  initSettings();
+  
+  // Initialize rubrics
+  initRubrics();
+  
+  // Load courses
+  loadCourses();
+});
+
+// Navigation between views
+function initNavigation() {
+  const navButtons = document.querySelectorAll('.nav-btn');
+  const views = document.querySelectorAll('.view');
+  
+  navButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const viewName = button.getAttribute('data-view');
+      
+      // Update active button
+      navButtons.forEach(btn => btn.classList.remove('active'));
+      button.classList.add('active');
+      
+      // Update active view
+      views.forEach(view => view.classList.remove('active'));
+      document.getElementById(`${viewName}-view`).classList.add('active');
+    });
+  });
+}
+
+// Initialize settings view
+function initSettings() {
+  document.getElementById('settings-token').value = userCredentials.token ? '••••••••••••••••' : '';
+  document.getElementById('settings-school').value = userCredentials.school || '';
+  
+  // Disconnect button
+  document.querySelector('.disconnect-btn').addEventListener('click', async () => {
+    if (confirm('Are you sure you want to disconnect from Canvas?')) {
+      await window.secureStorage.deleteCredentials();
+      window.location.href = 'index.html';
+    }
+  });
+}
+
+// Load courses from Canvas API via backend
+async function loadCourses() {
+  const coursesList = document.getElementById('courses-list');
+  
+  try {
+    const response = await fetch('http://localhost:3000/api/courses', {
+      headers: {
+        'Authorization': userCredentials.token,
+        'X-School-URL': userCredentials.school
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch courses');
+    }
+
+    const courses = await response.json();
+    
+    // Clear loading message
+    coursesList.innerHTML = '';
+    
+    if (courses.length === 0) {
+      coursesList.innerHTML = `
+        <div class="empty-message">
+          <p>No TA courses found</p>
+          <p style="font-size: 14px; color: #888;">You are not currently a TA for any courses</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Display courses
+    for (const course of courses) {
+      // Fetch ungraded count for each course
+      const ungradedCount = await getUngradedCountForCourse(course.id);
+      
+      const courseData = {
+        id: course.id,
+        name: course.name,
+        code: course.course_code,
+        ungraded: ungradedCount,
+        total: course.total_students || 0
+      };
+      
+      const courseCard = createCourseCard(courseData);
+      coursesList.appendChild(courseCard);
+    }
+  } catch (error) {
+    console.error('Error loading courses:', error);
+    coursesList.innerHTML = `
+      <div class="empty-message">
+        <p>Failed to load courses</p>
+        <p style="font-size: 14px; color: #888;">Make sure the backend server is running on port 3000</p>
+      </div>
+    `;
+  }
+}
+
+// Get ungraded submission count for a course
+async function getUngradedCountForCourse(courseId) {
+  try {
+    // Get all assignments for the course
+    const response = await fetch(`http://localhost:3000/api/courses/${courseId}/assignments`, {
+      headers: {
+        'Authorization': userCredentials.token,
+        'X-School-URL': userCredentials.school
+      }
+    });
+
+    if (!response.ok) {
+      return 0;
+    }
+
+    const assignments = await response.json();
+    let totalUngraded = 0;
+
+    // Sum up needs_grading_count from all assignments
+    for (const assignment of assignments) {
+      totalUngraded += assignment.needs_grading_count || 0;
+    }
+
+    return totalUngraded;
+  } catch (error) {
+    console.error(`Error fetching ungraded count for course ${courseId}:`, error);
+    return 0;
+  }
+}
+
+// Create a course card element
+function createCourseCard(course) {
+  const card = document.createElement('div');
+  card.className = 'course-card';
+  card.onclick = () => openCourse(course);
+  
+  card.innerHTML = `
+    <div class="course-name">${course.name}</div>
+    <div class="course-code">${course.code}</div>
+    <div class="course-stats">
+      <div class="stat-item">
+        <div class="stat-label">Ungraded</div>
+        <div class="stat-value">${course.ungraded}</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Total Students</div>
+        <div class="stat-value">${course.total}</div>
+      </div>
+    </div>
+  `;
+  
+  return card;
+}
+
+// Open course details (placeholder)
+function openCourse(course) {
+  console.log('Opening course:', course);
+  alert(`Course: ${course.name}\n\nThis will open the assignment list for grading.\n(To be implemented)`);
+}
+
+// ========== RUBRICS FUNCTIONALITY ==========
+
+let allCourses = [];
+let courseAssignments = [];
+let selectedAssignment = null;
+let editingRubricId = null;
+
+// Initialize rubrics view
+function initRubrics() {
+  const createBtn = document.getElementById('create-rubric-btn');
+  const cancelBtn = document.getElementById('cancel-rubric-btn');
+  const saveBtn = document.getElementById('save-rubric-btn');
+  const courseSelect = document.getElementById('course-select');
+  const assignmentSelect = document.getElementById('assignment-select');
+  const typeButtons = document.querySelectorAll('.type-btn');
+  
+  // Create button
+  createBtn.addEventListener('click', () => {
+    showRubricForm();
+    loadTACourses();
+  });
+  
+  // Cancel button
+  cancelBtn.addEventListener('click', () => {
+    hideRubricForm();
+  });
+  
+  // Save button
+  saveBtn.addEventListener('click', () => {
+    saveRubric();
+  });
+  
+  // Course selection
+  courseSelect.addEventListener('change', (e) => {
+    handleCourseSelection(e.target.value);
+  });
+  
+  // Assignment selection
+  assignmentSelect.addEventListener('change', (e) => {
+    handleAssignmentSelection(e.target.value);
+  });
+  
+  // Rubric type toggle
+  typeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      typeButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      const type = btn.getAttribute('data-type');
+      toggleRubricType(type);
+    });
+  });
+  
+  // Load saved rubrics
+  loadSavedRubrics();
+}
+
+// Show rubric form
+function showRubricForm(rubric = null) {
+  editingRubricId = rubric ? rubric.id : null;
+  
+  document.getElementById('rubric-form').style.display = 'block';
+  document.getElementById('assignment-group').style.display = 'none';
+  document.getElementById('assignment-details').style.display = 'none';
+  document.getElementById('create-rubric-btn').style.display = 'none';
+  
+  // Update title
+  document.getElementById('form-title').textContent = rubric ? 'Edit Rubric' : 'Create New Rubric';
+  
+  // If editing, populate form
+  if (rubric) {
+    populateFormForEdit(rubric);
+  }
+}
+
+// Hide rubric form
+function hideRubricForm() {
+  document.getElementById('rubric-form').style.display = 'none';
+  document.getElementById('assignment-group').style.display = 'none';
+  document.getElementById('assignment-details').style.display = 'none';
+  document.getElementById('create-rubric-btn').style.display = 'block';
+  
+  // Reset form
+  editingRubricId = null;
+  document.getElementById('course-select').value = '';
+  document.getElementById('assignment-select').value = '';
+  document.getElementById('points-input').value = '';
+  document.getElementById('rubric-text').value = '';
+  document.getElementById('rubric-file').value = '';
+  
+  // Reset rubric type to text
+  document.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelector('.type-btn[data-type="text"]').classList.add('active');
+  document.getElementById('text-rubric').style.display = 'block';
+  document.getElementById('file-rubric').style.display = 'none';
+}
+
+// Load TA courses into dropdown
+async function loadTACourses() {
+  const courseSelect = document.getElementById('course-select');
+  courseSelect.innerHTML = '<option value="">Loading courses...</option>';
+  
+  try {
+    const response = await fetch('http://localhost:3000/api/courses', {
+      headers: {
+        'Authorization': userCredentials.token,
+        'X-School-URL': userCredentials.school
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch courses');
+    }
+    
+    allCourses = await response.json();
+    
+    // Populate dropdown
+    courseSelect.innerHTML = '<option value="">Select a course...</option>';
+    allCourses.forEach((course, index) => {
+      const option = document.createElement('option');
+      option.value = index;
+      option.textContent = course.name;
+      courseSelect.appendChild(option);
+    });
+    
+  } catch (error) {
+    console.error('Error loading courses:', error);
+    courseSelect.innerHTML = '<option value="">Error loading courses</option>';
+  }
+}
+
+// Handle course selection
+async function handleCourseSelection(index) {
+  if (index === '') {
+    document.getElementById('assignment-group').style.display = 'none';
+    document.getElementById('assignment-details').style.display = 'none';
+    return;
+  }
+  
+  const selectedCourse = allCourses[parseInt(index)];
+  
+  // Show assignment dropdown and load assignments
+  document.getElementById('assignment-group').style.display = 'block';
+  await loadCourseAssignments(selectedCourse.id, selectedCourse.name);
+}
+
+// Load assignments for selected course
+async function loadCourseAssignments(courseId, courseName) {
+  const assignmentSelect = document.getElementById('assignment-select');
+  assignmentSelect.innerHTML = '<option value="">Loading assignments...</option>';
+  
+  try {
+    const response = await fetch(`http://localhost:3000/api/courses/${courseId}/assignments`, {
+      headers: {
+        'Authorization': userCredentials.token,
+        'X-School-URL': userCredentials.school
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch assignments');
+    }
+    
+    courseAssignments = await response.json();
+    
+    // Populate dropdown
+    assignmentSelect.innerHTML = '<option value="">Select an assignment...</option>';
+    courseAssignments.forEach((assignment, index) => {
+      const option = document.createElement('option');
+      option.value = index;
+      option.textContent = assignment.name;
+      assignmentSelect.appendChild(option);
+    });
+    
+    // Store course name in assignments for later use
+    courseAssignments.forEach(assignment => {
+      assignment.courseName = courseName;
+    });
+    
+  } catch (error) {
+    console.error('Error loading assignments:', error);
+    assignmentSelect.innerHTML = '<option value="">Error loading assignments</option>';
+  }
+}
+
+// Handle assignment selection
+function handleAssignmentSelection(index) {
+  if (index === '') {
+    document.getElementById('assignment-details').style.display = 'none';
+    return;
+  }
+  
+  selectedAssignment = courseAssignments[parseInt(index)];
+  
+  // Show assignment details
+  document.getElementById('assignment-details').style.display = 'block';
+  
+  // Auto-populate points
+  document.getElementById('points-input').value = selectedAssignment.points_possible || 100;
+}
+
+// Populate form for editing
+async function populateFormForEdit(rubric) {
+  // Load courses first
+  await loadTACourses();
+  
+  // Find and select the course
+  const courseIndex = allCourses.findIndex(c => c.name === rubric.courseName);
+  if (courseIndex !== -1) {
+    document.getElementById('course-select').value = courseIndex;
+    
+    // Load assignments for this course
+    await handleCourseSelection(courseIndex.toString());
+    
+    // Find and select the assignment
+    const assignmentIndex = courseAssignments.findIndex(a => a.id === rubric.assignmentId);
+    if (assignmentIndex !== -1) {
+      document.getElementById('assignment-select').value = assignmentIndex;
+      handleAssignmentSelection(assignmentIndex.toString());
+    }
+  }
+  
+  // Set points
+  document.getElementById('points-input').value = rubric.points;
+  
+  // Set rubric type and content
+  document.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
+  
+  if (rubric.type === 'text') {
+    document.querySelector('.type-btn[data-type="text"]').classList.add('active');
+    document.getElementById('text-rubric').style.display = 'block';
+    document.getElementById('file-rubric').style.display = 'none';
+    document.getElementById('rubric-text').value = rubric.content;
+  } else {
+    document.querySelector('.type-btn[data-type="file"]').classList.add('active');
+    document.getElementById('text-rubric').style.display = 'none';
+    document.getElementById('file-rubric').style.display = 'block';
+    // Note: Can't pre-populate file input for security reasons
+  }
+}
+
+// Toggle rubric type (text/file)
+function toggleRubricType(type) {
+  const textRubric = document.getElementById('text-rubric');
+  const fileRubric = document.getElementById('file-rubric');
+  
+  if (type === 'text') {
+    textRubric.style.display = 'block';
+    fileRubric.style.display = 'none';
+  } else {
+    textRubric.style.display = 'none';
+    fileRubric.style.display = 'block';
+  }
+}
+
+// Save rubric
+async function saveRubric() {
+  if (!selectedAssignment) {
+    alert('Please select an assignment');
+    return;
+  }
+  
+  const points = document.getElementById('points-input').value;
+  const rubricType = document.querySelector('.type-btn.active').getAttribute('data-type');
+  
+  let rubricContent = null;
+  let rubricFileName = null;
+  
+  if (rubricType === 'text') {
+    rubricContent = document.getElementById('rubric-text').value.trim();
+    if (!rubricContent) {
+      alert('Please enter rubric content');
+      return;
+    }
+  } else {
+    const fileInput = document.getElementById('rubric-file');
+    
+    // If editing and no new file selected, keep existing file
+    if (editingRubricId && (!fileInput.files || fileInput.files.length === 0)) {
+      const rubrics = JSON.parse(localStorage.getItem('rubrics') || '[]');
+      const existingRubric = rubrics.find(r => r.id === editingRubricId);
+      if (existingRubric) {
+        rubricContent = existingRubric.content;
+        rubricFileName = existingRubric.fileName;
+      }
+    } else if (fileInput.files && fileInput.files.length > 0) {
+      rubricFileName = fileInput.files[0].name;
+      // Read file content
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+      
+      await new Promise((resolve, reject) => {
+        reader.onload = (e) => {
+          rubricContent = e.target.result;
+          resolve();
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    } else {
+      alert('Please upload a rubric file');
+      return;
+    }
+  }
+  
+  // Get rubrics from localStorage
+  const rubrics = JSON.parse(localStorage.getItem('rubrics') || '[]');
+  
+  if (editingRubricId) {
+    // Update existing rubric
+    const index = rubrics.findIndex(r => r.id === editingRubricId);
+    if (index !== -1) {
+      rubrics[index] = {
+        ...rubrics[index],
+        assignmentId: selectedAssignment.id,
+        assignmentName: selectedAssignment.name,
+        courseName: selectedAssignment.courseName,
+        points: parseFloat(points),
+        type: rubricType,
+        content: rubricContent,
+        fileName: rubricFileName,
+        updatedAt: new Date().toISOString()
+      };
+    }
+  } else {
+    // Create new rubric
+    const rubric = {
+      id: Date.now(),
+      assignmentId: selectedAssignment.id,
+      assignmentName: selectedAssignment.name,
+      courseName: selectedAssignment.courseName,
+      points: parseFloat(points),
+      type: rubricType,
+      content: rubricContent,
+      fileName: rubricFileName,
+      createdAt: new Date().toISOString()
+    };
+    rubrics.push(rubric);
+  }
+  
+  // Save to localStorage
+  localStorage.setItem('rubrics', JSON.stringify(rubrics));
+  
+  // Hide form and refresh list
+  hideRubricForm();
+  loadSavedRubrics();
+  
+  alert(editingRubricId ? 'Rubric updated successfully!' : 'Rubric saved successfully!');
+}
+
+// Load and display saved rubrics
+function loadSavedRubrics() {
+  const rubricsList = document.getElementById('rubrics-list');
+  const rubrics = JSON.parse(localStorage.getItem('rubrics') || '[]');
+  
+  if (rubrics.length === 0) {
+    rubricsList.innerHTML = '<p style="color: #666; text-align: center; padding: 40px;">No rubrics created yet</p>';
+    return;
+  }
+  
+  rubricsList.innerHTML = '';
+  rubrics.forEach(rubric => {
+    const rubricItem = document.createElement('div');
+    rubricItem.className = 'rubric-item';
+    rubricItem.innerHTML = `
+      <div class="rubric-header">
+        <div>
+          <div class="rubric-assignment">${rubric.assignmentName}</div>
+          <div style="font-size: 14px; color: #888; margin-top: 4px;">${rubric.courseName}</div>
+        </div>
+        <div style="text-align: right;">
+          <div class="rubric-points">${rubric.points} points</div>
+          <div class="rubric-type">${rubric.type === 'text' ? 'Text' : 'File: ' + rubric.fileName}</div>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
+        <div style="font-size: 12px; color: #aaa;">
+          Created: ${new Date(rubric.createdAt).toLocaleString()}
+          ${rubric.updatedAt ? `<br>Updated: ${new Date(rubric.updatedAt).toLocaleString()}` : ''}
+        </div>
+        <div class="rubric-actions">
+          <button class="rubric-action-btn edit-btn" onclick="editRubric(${rubric.id})">Edit</button>
+          <button class="rubric-action-btn delete-btn" onclick="deleteRubric(${rubric.id})">Delete</button>
+        </div>
+      </div>
+    `;
+    rubricsList.appendChild(rubricItem);
+  });
+}
+
+// Edit rubric
+function editRubric(rubricId) {
+  const rubrics = JSON.parse(localStorage.getItem('rubrics') || '[]');
+  const rubric = rubrics.find(r => r.id === rubricId);
+  
+  if (rubric) {
+    showRubricForm(rubric);
+  }
+}
+
+// Delete rubric
+function deleteRubric(rubricId) {
+  if (!confirm('Are you sure you want to delete this rubric?')) {
+    return;
+  }
+  
+  const rubrics = JSON.parse(localStorage.getItem('rubrics') || '[]');
+  const filteredRubrics = rubrics.filter(r => r.id !== rubricId);
+  
+  localStorage.setItem('rubrics', JSON.stringify(filteredRubrics));
+  loadSavedRubrics();
+  
+  alert('Rubric deleted successfully!');
+}
+

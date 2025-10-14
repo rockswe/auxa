@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>auxa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Forum&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 class="app-name">auxa</h1>
+      <p class="app-description">
+        Derived from <em>auxilium</em>, Latin for 'help, aid, assistance' Auxa is an AI teaching assistant 
+        and grader designed to helps both students and instructors.
+      </p>
+    </div>
+
+    <div class="form-container">
+      <div class="input-group">
+        <label for="canvas-token">Canvas LMS Access Token</label>
+        <input 
+          type="password" 
+          id="canvas-token" 
+          placeholder="Enter your Canvas API access token"
+          autocomplete="off"
+        />
+        <span class="help-text">Credentials stored in your OS keychain and never shared. (macOS: Keychain Access, Windows: Credential Manager, Linux: libsecret)</span>
+      </div>
+
+      <div class="input-group">
+        <label for="school-link">Canvas LMS School URL</label>
+        <input 
+          type="text" 
+          id="school-link" 
+          placeholder="e.g., canvas.stanford.edu or usc.instructure.com"
+          autocomplete="off"
+        />
+        <span class="help-text">Enter your institution's Canvas LMS domain.</span>
+      </div>
+
+      <button class="connect-btn" id="connect-btn">
+        <span class="btn-text">Connect to Canvas</span>
+      </button>
+    </div>
+
+    <div class="footer">
+      <p class="version-text">v1.0.0</p>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
+

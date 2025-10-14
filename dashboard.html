@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>auxa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Forum&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Navbar -->
+    <nav class="navbar">
+      <div class="nav-brand">
+        <h1 class="nav-title">auxa</h1>
+      </div>
+      <div class="nav-links">
+        <button class="nav-btn active" data-view="courses">Courses</button>
+        <button class="nav-btn" data-view="rubrics">Rubrics</button>
+        <button class="nav-btn" data-view="settings">Settings</button>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Courses View -->
+      <div id="courses-view" class="view active">
+        <div class="view-header">
+          <h2 class="view-title">Courses</h2>
+          <p class="view-subtitle">Courses where you are enrolled as a Teaching Assistant (TA).</p>
+        </div>
+        
+        <div id="courses-list" class="courses-grid">
+          <!-- Courses will be loaded here -->
+          <div class="loading-message">
+            <p>Loading your courses...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rubrics View -->
+      <div id="rubrics-view" class="view">
+        <div class="view-header">
+          <h2 class="view-title">Rubrics</h2>
+          <p class="view-subtitle">Manage grading rubrics.</p>
+        </div>
+        
+        <div class="rubrics-content">
+          <button class="create-rubric-btn" id="create-rubric-btn">+ Create Rubric</button>
+          
+          <!-- Create Rubric Form (hidden by default) -->
+          <div id="rubric-form" class="rubric-form" style="display: none;">
+            <h3 class="form-section-title" id="form-title">Create New Rubric</h3>
+            
+            <div class="form-group">
+              <label for="course-select">Select Course</label>
+              <select id="course-select" class="form-select">
+                <option value="">Loading courses...</option>
+              </select>
+            </div>
+            
+            <div class="form-group" id="assignment-group" style="display: none;">
+              <label for="assignment-select">Select Assignment</label>
+              <select id="assignment-select" class="form-select">
+                <option value="">Select a course first...</option>
+              </select>
+            </div>
+            
+            <div id="assignment-details" style="display: none;">
+              <div class="form-group">
+                <label for="points-input">Possible Points</label>
+                <input type="number" id="points-input" class="form-input" step="0.01" min="0" />
+              </div>
+              
+              <div class="form-group">
+                <label>Rubric Type</label>
+                <div class="rubric-type-selector">
+                  <button class="type-btn active" data-type="text">Text Input</button>
+                  <button class="type-btn" data-type="file">Upload File</button>
+                </div>
+              </div>
+              
+              <!-- Text Input -->
+              <div id="text-rubric" class="rubric-input-area">
+                <div class="form-group">
+                  <label for="rubric-text">Rubric Content</label>
+                  <textarea id="rubric-text" class="form-textarea" rows="10" placeholder="Enter rubric details, grading criteria, etc..."></textarea>
+                </div>
+              </div>
+              
+              <!-- File Upload -->
+              <div id="file-rubric" class="rubric-input-area" style="display: none;">
+                <div class="form-group">
+                  <label for="rubric-file">Upload Rubric File</label>
+                  <input type="file" id="rubric-file" class="form-file" accept=".pdf,.docx,.doc" />
+                  <span class="file-help">Supported formats: PDF, DOCX</span>
+                </div>
+              </div>
+              
+              <div class="form-actions">
+                <button class="btn-save" id="save-rubric-btn">Save Rubric</button>
+                <button class="btn-cancel" id="cancel-rubric-btn">Cancel</button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Rubrics List -->
+          <div id="rubrics-list" class="rubrics-list">
+            <!-- Existing rubrics will be listed here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings View -->
+      <div id="settings-view" class="view">
+        <div class="view-header">
+          <h2 class="view-title">Settings</h2>
+          <p class="view-subtitle">Configure your preferences</p>
+        </div>
+        
+        <div class="settings-content">
+          <div class="setting-item">
+            <label>Canvas Access Token</label>
+            <input type="password" id="settings-token" class="setting-input" readonly />
+          </div>
+          <div class="setting-item">
+            <label>School Canvas URL</label>
+            <input type="text" id="settings-school" class="setting-input" readonly />
+          </div>
+          <button class="disconnect-btn">Disconnect</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
+

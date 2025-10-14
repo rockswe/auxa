@@ -1,0 +1,520 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Forum', serif;
+  background: #ffffff;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Navbar Styles */
+.navbar {
+  background: #ffffff;
+  border-bottom: 2px solid #e0e0e0;
+  padding: 20px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+}
+
+.nav-title {
+  font-size: 32px;
+  font-weight: 400;
+  color: #000000;
+  letter-spacing: -2px;
+  text-transform: lowercase;
+}
+
+.nav-links {
+  display: flex;
+  gap: 10px;
+}
+
+.nav-btn {
+  font-family: 'Forum', serif;
+  font-size: 16px;
+  padding: 10px 24px;
+  background: transparent;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.nav-btn:hover {
+  border-color: #000000;
+  background: #fafafa;
+}
+
+.nav-btn.active {
+  background: #000000;
+  color: #ffffff;
+  border-color: #000000;
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  padding: 40px;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.view {
+  display: none;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.view.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.view-header {
+  margin-bottom: 30px;
+}
+
+.view-title {
+  font-size: 36px;
+  font-weight: 400;
+  color: #000000;
+  margin-bottom: 8px;
+}
+
+.view-subtitle {
+  font-size: 16px;
+  color: #666;
+}
+
+/* Courses Grid */
+.courses-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.course-card {
+  background: #ffffff;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 24px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.course-card:hover {
+  border-color: #000000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.course-name {
+  font-size: 20px;
+  font-weight: 400;
+  color: #000000;
+  margin-bottom: 8px;
+}
+
+.course-code {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 16px;
+}
+
+.course-stats {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 400;
+  color: #000000;
+}
+
+.loading-message {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+  font-size: 16px;
+}
+
+.empty-message {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-message p {
+  color: #666;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+/* Content Placeholder */
+.content-placeholder {
+  text-align: center;
+  padding: 80px 20px;
+  color: #666;
+  font-size: 18px;
+}
+
+/* Rubrics */
+.rubrics-content {
+  max-width: 800px;
+}
+
+.create-rubric-btn {
+  padding: 12px 28px;
+  font-size: 16px;
+  font-family: 'Forum', serif;
+  color: #ffffff;
+  background: #000000;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: 30px;
+}
+
+.create-rubric-btn:hover {
+  background: #333;
+}
+
+.rubric-form {
+  background: #ffffff;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 30px;
+  margin-bottom: 30px;
+}
+
+.form-section-title {
+  font-size: 24px;
+  font-weight: 400;
+  color: #000000;
+  margin-bottom: 24px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 15px;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.form-select,
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-family: 'Forum', serif;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.3s ease;
+  background: #fafafa;
+}
+
+.form-select:focus,
+.form-input:focus,
+.form-textarea:focus {
+  border-color: #000000;
+  background: white;
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 150px;
+}
+
+.form-file {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-family: 'Forum', serif;
+  border: 2px dashed #e0e0e0;
+  border-radius: 8px;
+  background: #fafafa;
+  cursor: pointer;
+}
+
+.file-help {
+  display: block;
+  font-size: 12px;
+  color: #888;
+  margin-top: 6px;
+}
+
+.rubric-type-selector {
+  display: flex;
+  gap: 10px;
+}
+
+.type-btn {
+  flex: 1;
+  padding: 10px 20px;
+  font-size: 15px;
+  font-family: 'Forum', serif;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.type-btn:hover {
+  border-color: #000000;
+}
+
+.type-btn.active {
+  background: #000000;
+  color: #ffffff;
+  border-color: #000000;
+}
+
+.rubric-input-area {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.btn-save,
+.btn-cancel {
+  flex: 1;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-family: 'Forum', serif;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-save {
+  background: #000000;
+  color: #ffffff;
+  border-color: #000000;
+}
+
+.btn-save:hover {
+  background: #333;
+}
+
+.btn-cancel {
+  background: #ffffff;
+  color: #333;
+}
+
+.btn-cancel:hover {
+  border-color: #000000;
+}
+
+.rubrics-list {
+  margin-top: 30px;
+}
+
+.rubric-item {
+  background: #ffffff;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  transition: all 0.3s ease;
+}
+
+.rubric-item:hover {
+  border-color: #000000;
+}
+
+.rubric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.rubric-assignment {
+  font-size: 18px;
+  font-weight: 400;
+  color: #000000;
+}
+
+.rubric-points {
+  font-size: 14px;
+  color: #666;
+}
+
+.rubric-type {
+  font-size: 12px;
+  color: #888;
+  text-transform: uppercase;
+}
+
+.rubric-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.rubric-action-btn {
+  padding: 6px 16px;
+  font-size: 14px;
+  font-family: 'Forum', serif;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #ffffff;
+  color: #333;
+}
+
+.rubric-action-btn:hover {
+  border-color: #000000;
+}
+
+.rubric-action-btn.edit-btn:hover {
+  background: #000000;
+  color: #ffffff;
+}
+
+.rubric-action-btn.delete-btn {
+  border-color: #dc3545;
+  color: #dc3545;
+}
+
+.rubric-action-btn.delete-btn:hover {
+  background: #dc3545;
+  color: #ffffff;
+  border-color: #dc3545;
+}
+
+/* Settings */
+.settings-content {
+  max-width: 600px;
+}
+
+.setting-item {
+  margin-bottom: 24px;
+}
+
+.setting-item label {
+  display: block;
+  font-size: 15px;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.setting-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 15px;
+  font-family: 'Forum', serif;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  outline: none;
+  background: #fafafa;
+  color: #666;
+}
+
+.disconnect-btn {
+  padding: 12px 32px;
+  font-size: 16px;
+  font-family: 'Forum', serif;
+  color: #ffffff;
+  background: #000000;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 20px;
+}
+
+.disconnect-btn:hover {
+  background: #333;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px;
+  }
+
+  .nav-links {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .nav-btn {
+    flex: 1;
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+
+  .main-content {
+    padding: 24px 20px;
+  }
+
+  .view-title {
+    font-size: 28px;
+  }
+
+  .courses-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

@@ -1,0 +1,44 @@
+{
+  "name": "auxa",
+  "version": "1.0.0",
+  "description": "AI Teaching Assistant and Grader for Canvas LMS",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "backend": "cd backend && go run main.go",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:backend": "cd backend && go build -o auxa-server"
+  },
+  "keywords": [
+    "canvas",
+    "lms",
+    "grading",
+    "teaching-assistant",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "build": {
+    "appId": "com.auxa.app",
+    "productName": "Auxa",
+    "mac": {
+      "category": "public.app-category.education",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    }
+  }
+}
+
