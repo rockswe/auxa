@@ -681,9 +681,647 @@ function formatFileSize(bytes) {
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
-// Grade submission (placeholder for now)
-function gradeSubmission(courseId, assignmentId, submissionId, userId) {
-  alert(`Grade submission ${submissionId} for user ${userId}\n\nThis will open the AI grading interface.\n(To be implemented)`);
+// Grade submission - Open grading modal
+let currentGradingContext = null;
+let currentMonacoEditor = null;
+
+async function gradeSubmission(courseId, assignmentId, submissionId, userId) {
+  try {
+    // Fetch full submission details
+    const response = await fetch(`http://localhost:3000/api/courses/${courseId}/assignments/${assignmentId}/submissions`, {
+      headers: {
+        'Authorization': userCredentials.token,
+        'X-School-URL': userCredentials.school
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch submission details');
+    }
+    
+    const submissions = await response.json();
+    const submission = submissions.find(s => s.id === submissionId);
+    
+    if (!submission) {
+      alert('Submission not found');
+      return;
+    }
+    
+    // Fetch assignment details for rubric and points
+    const assignmentResponse = await fetch(`http://localhost:3000/api/courses/${courseId}/assignments`, {
+      headers: {
+        'Authorization': userCredentials.token,
+        'X-School-URL': userCredentials.school
+      }
+    });
+    
+    const assignments = await assignmentResponse.json();
+    const assignment = assignments.find(a => a.id === assignmentId);
+    
+    // Store context
+    currentGradingContext = {
+      courseId,
+      assignmentId,
+      submissionId,
+      userId,
+      submission,
+      assignment
+    };
+    
+    // Open modal and load content
+    await openGradingModal(submission, assignment);
+    
+  } catch (error) {
+    console.error('Error loading submission for grading:', error);
+    alert('Failed to load submission. Please try again.');
+  }
+}
+
+// Open grading modal
+async function openGradingModal(submission, assignment) {
+  const modal = document.getElementById('grading-modal');
+  
+  // Set header info
+  document.getElementById('grading-student-name').textContent = submission.user ? submission.user.name : 'Unknown Student';
+  document.getElementById('grading-assignment-name').textContent = assignment ? assignment.name : 'Assignment';
+  
+  // Set max score
+  document.getElementById('grading-max-score').value = assignment ? assignment.points_possible : 100;
+  
+  // Load rubric
+  loadRubricForGrading(currentGradingContext.courseId, currentGradingContext.assignmentId);
+  
+  // Clear previous content
+  document.getElementById('grading-preview-content').innerHTML = '<div class="loading-message"><p>Loading submission...</p></div>';
+  document.getElementById('grading-file-list').innerHTML = '';
+  document.getElementById('grading-feedback').value = '';
+  document.getElementById('grading-score').value = '';
+  
+  // Show modal
+  modal.style.display = 'flex';
+  
+  // Load submission content
+  await loadSubmissionContent(submission);
+}
+
+// Close grading modal
+function closeGradingModal() {
+  const modal = document.getElementById('grading-modal');
+  modal.style.display = 'none';
+  
+  // Clean up Monaco editor
+  if (currentMonacoEditor) {
+    currentMonacoEditor.dispose();
+    currentMonacoEditor = null;
+  }
+  
+  currentGradingContext = null;
+}
+
+// Load rubric for grading
+function loadRubricForGrading(courseId, assignmentId) {
+  const rubricDisplay = document.getElementById('grading-rubric-content');
+  
+  // Get rubrics from localStorage
+  const rubrics = JSON.parse(localStorage.getItem('rubrics') || '[]');
+  const rubric = rubrics.find(r => r.assignmentId === assignmentId);
+  
+  if (rubric) {
+    if (rubric.type === 'text') {
+      rubricDisplay.innerHTML = `<div style="white-space: pre-wrap;">${rubric.content}</div>`;
+    } else {
+      rubricDisplay.innerHTML = `<p>📄 ${rubric.fileName}</p><p style="font-size: 12px; color: #888; margin-top: 8px;">File-based rubric stored</p>`;
+    }
+  } else {
+    rubricDisplay.innerHTML = '<p style="color: #888;">No rubric found for this assignment</p>';
+  }
+}
+
+// Load submission content based on type
+async function loadSubmissionContent(submission) {
+  const contentArea = document.getElementById('grading-preview-content');
+  const fileListArea = document.getElementById('grading-file-list');
+  
+  try {
+    if (submission.submission_type === 'online_text_entry') {
+      // Text submission
+      fileListArea.innerHTML = '';
+      contentArea.innerHTML = `
+        <div class="preview-container">
+          <div class="preview-text-content">${submission.body || 'No content'}</div>
+        </div>
+      `;
+    } 
+    else if (submission.submission_type === 'online_upload') {
+      // File upload submission
+      if (submission.attachments && submission.attachments.length > 0) {
+        // Create file tabs
+        fileListArea.innerHTML = submission.attachments.map((file, index) => 
+          `<div class="grading-file-tab ${index === 0 ? 'active' : ''}" onclick="switchSubmissionFile(${index})">${file.filename}</div>`
+        ).join('');
+        
+        // Load first file
+        await renderSubmissionFile(submission.attachments[0], 0);
+      } else {
+        contentArea.innerHTML = '<div class="preview-container"><p>No files attached</p></div>';
+      }
+    }
+    else if (submission.submission_type === 'media_recording') {
+      // Media recording
+      fileListArea.innerHTML = '';
+      if (submission.media_comment) {
+        const mediaType = submission.media_comment.media_type || 'video';
+        const mediaUrl = submission.media_comment.url;
+        contentArea.innerHTML = `
+          <div class="preview-container">
+            <div class="preview-media-content">
+              ${mediaType === 'video' ? 
+                `<video controls src="${mediaUrl}">Your browser does not support the video tag.</video>` :
+                `<audio controls src="${mediaUrl}">Your browser does not support the audio tag.</audio>`
+              }
+            </div>
+          </div>
+        `;
+      } else {
+        contentArea.innerHTML = '<div class="preview-container"><p>Media file not available</p></div>';
+      }
+    }
+    else if (submission.submission_type === 'online_url') {
+      // URL submission
+      fileListArea.innerHTML = '';
+      contentArea.innerHTML = `
+        <div class="preview-container">
+          <h3>Submitted URL:</h3>
+          <p><a href="${submission.url}" target="_blank">${submission.url}</a></p>
+          <iframe src="${submission.url}" style="width: 100%; height: 600px; border: 1px solid #ddd; border-radius: 8px; margin-top: 16px;"></iframe>
+        </div>
+      `;
+    }
+    else {
+      contentArea.innerHTML = `<div class="preview-container"><p>Unsupported submission type: ${submission.submission_type}</p></div>`;
+    }
+  } catch (error) {
+    console.error('Error loading submission content:', error);
+    contentArea.innerHTML = '<div class="preview-container"><p style="color: #f44336;">Error loading submission content</p></div>';
+  }
+}
+
+// Switch between files in multi-file submission
+async function switchSubmissionFile(index) {
+  const submission = currentGradingContext.submission;
+  const attachments = submission.attachments;
+  
+  if (!attachments || index >= attachments.length) return;
+  
+  // Update active tab
+  const tabs = document.querySelectorAll('.grading-file-tab');
+  tabs.forEach((tab, i) => {
+    tab.classList.toggle('active', i === index);
+  });
+  
+  // Load file
+  await renderSubmissionFile(attachments[index], index);
+}
+
+// Render individual submission file based on extension
+async function renderSubmissionFile(attachment, index) {
+  const contentArea = document.getElementById('grading-preview-content');
+  const filename = attachment.filename;
+  const fileUrl = attachment.url;
+  const extension = filename.split('.').pop().toLowerCase();
+  
+  contentArea.innerHTML = '<div class="loading-message"><p>Loading file...</p></div>';
+  
+  try {
+    // Fetch file content
+    const response = await fetch(fileUrl);
+    if (!response.ok) throw new Error('Failed to fetch file');
+    
+    // Route to appropriate renderer based on file type
+    if (extension === 'pdf') {
+      await renderPDFFile(response, contentArea);
+    } 
+    else if (['xlsx', 'xls'].includes(extension)) {
+      await renderExcelFile(response, contentArea);
+    }
+    else if (extension === 'csv') {
+      await renderCSVFile(response, contentArea);
+    }
+    else if (extension === 'docx') {
+      await renderDocxFile(response, contentArea);
+    }
+    else if (extension === 'md') {
+      await renderMarkdownFile(response, contentArea);
+    }
+    else if (extension === 'json') {
+      await renderJSONFile(response, contentArea);
+    }
+    else if (extension === 'txt' || extension === 'tex') {
+      await renderTextFile(response, contentArea, extension === 'tex');
+    }
+    else if (extension === 'ipynb') {
+      await renderJupyterFile(response, contentArea);
+    }
+    else if (isCodeFile(extension)) {
+      await renderCodeFile(response, contentArea, extension);
+    }
+    else if (isImageFile(extension)) {
+      await renderImageFile(fileUrl, contentArea);
+    }
+    else if (isMediaFile(extension)) {
+      await renderMediaFile(fileUrl, contentArea, extension);
+    }
+    else if (extension === 'pptx') {
+      renderPPTXPlaceholder(contentArea, filename);
+    }
+    else {
+      renderUnsupportedFile(contentArea, filename, fileUrl);
+    }
+  } catch (error) {
+    console.error('Error rendering file:', error);
+    contentArea.innerHTML = `<div class="preview-container"><p style="color: #f44336;">Error loading file: ${error.message}</p></div>`;
+  }
+}
+
+// Check if file is a code file
+function isCodeFile(ext) {
+  const codeExtensions = ['py', 'js', 'ts', 'jsx', 'tsx', 'go', 'c', 'cpp', 'h', 'hpp', 'java', 'cs', 'php', 'rb', 'rs', 'swift', 'kt', 'scala', 'r', 'sh', 'bash', 'sql', 'html', 'css', 'scss', 'sass', 'xml', 'yaml', 'yml'];
+  return codeExtensions.includes(ext);
+}
+
+// Check if file is an image
+function isImageFile(ext) {
+  return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
+}
+
+// Check if file is media
+function isMediaFile(ext) {
+  return ['mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm', 'ogg', 'mov', 'avi'].includes(ext);
+}
+
+// Render PDF file
+async function renderPDFFile(response, container) {
+  const arrayBuffer = await response.arrayBuffer();
+  const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  
+  container.innerHTML = `
+    <div class="preview-container">
+      <div class="pdf-controls">
+        <button class="pdf-nav-btn" onclick="changeGradingPDFPage(-1)">←</button>
+        <span class="pdf-page-info" id="grading-pdf-page-info">Page 1 of 1</span>
+        <button class="pdf-nav-btn" onclick="changeGradingPDFPage(1)">→</button>
+      </div>
+      <div class="pdf-container">
+        <canvas id="grading-pdf-canvas" class="pdf-canvas"></canvas>
+      </div>
+    </div>
+  `;
+  
+  // Load PDF with PDF.js
+  const loadingTask = pdfjsLib.getDocument(url);
+  const pdf = await loadingTask.promise;
+  
+  window.currentGradingPDF = {
+    pdf: pdf,
+    currentPage: 1,
+    totalPages: pdf.numPages
+  };
+  
+  document.getElementById('grading-pdf-page-info').textContent = `Page 1 of ${pdf.numPages}`;
+  await renderGradingPDFPage(1);
+}
+
+// Render PDF page
+async function renderGradingPDFPage(pageNumber) {
+  const state = window.currentGradingPDF;
+  if (!state) return;
+  
+  const page = await state.pdf.getPage(pageNumber);
+  const canvas = document.getElementById('grading-pdf-canvas');
+  if (!canvas) return;
+  
+  const context = canvas.getContext('2d');
+  const container = canvas.parentElement;
+  const containerWidth = container.clientWidth;
+  const viewport = page.getViewport({ scale: 1 });
+  const scale = Math.min((containerWidth - 40) / viewport.width, 2.0);
+  const scaledViewport = page.getViewport({ scale: scale });
+  const outputScale = window.devicePixelRatio || 1;
+  
+  canvas.width = Math.floor(scaledViewport.width * outputScale);
+  canvas.height = Math.floor(scaledViewport.height * outputScale);
+  canvas.style.width = Math.floor(scaledViewport.width) + 'px';
+  canvas.style.height = Math.floor(scaledViewport.height) + 'px';
+  
+  const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+  
+  await page.render({
+    canvasContext: context,
+    viewport: scaledViewport,
+    transform: transform
+  }).promise;
+}
+
+// Change PDF page
+async function changeGradingPDFPage(delta) {
+  const state = window.currentGradingPDF;
+  if (!state) return;
+  
+  const newPage = state.currentPage + delta;
+  if (newPage < 1 || newPage > state.totalPages) return;
+  
+  state.currentPage = newPage;
+  document.getElementById('grading-pdf-page-info').textContent = `Page ${newPage} of ${state.totalPages}`;
+  await renderGradingPDFPage(newPage);
+}
+
+// Render Excel file
+async function renderExcelFile(response, container) {
+  const arrayBuffer = await response.arrayBuffer();
+  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const htmlTable = XLSX.utils.sheet_to_html(worksheet);
+  
+  container.innerHTML = `
+    <div class="preview-container">
+      <div class="preview-spreadsheet-content">
+        <h3 style="margin-bottom: 12px;">Sheet: ${sheetName}</h3>
+        ${htmlTable}
+      </div>
+    </div>
+  `;
+}
+
+// Render CSV file
+async function renderCSVFile(response, container) {
+  const text = await response.text();
+  const workbook = XLSX.read(text, { type: 'string' });
+  
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const htmlTable = XLSX.utils.sheet_to_html(worksheet);
+  
+  container.innerHTML = `
+    <div class="preview-container">
+      <div class="preview-spreadsheet-content">
+        ${htmlTable}
+      </div>
+    </div>
+  `;
+}
+
+// Render DOCX file
+async function renderDocxFile(response, container) {
+  const arrayBuffer = await response.arrayBuffer();
+  const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+  
+  container.innerHTML = `
+    <div class="preview-container">
+      <div class="preview-markdown-content">
+        ${result.value}
+      </div>
+    </div>
+  `;
+}
+
+// Render Markdown file
+async function renderMarkdownFile(response, container) {
+  const text = await response.text();
+  const html = marked.parse(text);
+  
+  container.innerHTML = `
+    <div class="preview-container">
+      <div class="preview-markdown-content">
+        ${html}
+      </div>
+    </div>
+  `;
+}
+
+// Render JSON file
+async function renderJSONFile(response, container) {
+  const text = await response.text();
+  const json = JSON.parse(text);
+  const formatted = JSON.stringify(json, null, 2);
+  
+  container.innerHTML = `
+    <div class="preview-container">
+      <div id="monaco-editor-container"></div>
+    </div>
+  `;
+  
+  setTimeout(() => {
+    initMonacoEditor(formatted, 'json');
+  }, 100);
+}
+
+// Render text file
+async function renderTextFile(response, container, isLatex = false) {
+  const text = await response.text();
+  
+  container.innerHTML = `
+    <div class="preview-container">
+      <div class="preview-text-content">${text}</div>
+    </div>
+  `;
+}
+
+// Render Jupyter Notebook
+async function renderJupyterFile(response, container) {
+  const text = await response.text();
+  const notebook = JSON.parse(text);
+  
+  let html = '<div class="preview-container"><div class="preview-markdown-content">';
+  
+  notebook.cells.forEach((cell, index) => {
+    html += `<div style="margin-bottom: 24px; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;">`;
+    html += `<div style="font-size: 12px; color: #888; margin-bottom: 8px;">Cell ${index + 1} [${cell.cell_type}]</div>`;
+    
+    if (cell.cell_type === 'markdown') {
+      const markdownContent = Array.isArray(cell.source) ? cell.source.join('') : cell.source;
+      html += marked.parse(markdownContent);
+    } else if (cell.cell_type === 'code') {
+      const codeContent = Array.isArray(cell.source) ? cell.source.join('') : cell.source;
+      html += `<pre style="background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto;"><code>${escapeHtml(codeContent)}</code></pre>`;
+      
+      if (cell.outputs && cell.outputs.length > 0) {
+        html += '<div style="margin-top: 12px; padding: 12px; background: #fafafa; border-left: 3px solid #4CAF50; border-radius: 4px;">';
+        html += '<div style="font-size: 11px; color: #666; margin-bottom: 8px;">Output:</div>';
+        cell.outputs.forEach(output => {
+          if (output.text) {
+            const outputText = Array.isArray(output.text) ? output.text.join('') : output.text;
+            html += `<pre style="margin: 0; white-space: pre-wrap;">${escapeHtml(outputText)}</pre>`;
+          }
+        });
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+  });
+  
+  html += '</div></div>';
+  container.innerHTML = html;
+}
+
+// Render code file with Monaco Editor
+async function renderCodeFile(response, container, extension) {
+  const text = await response.text();
+  
+  container.innerHTML = `
+    <div class="preview-container">
+      <div id="monaco-editor-container"></div>
+    </div>
+  `;
+  
+  setTimeout(() => {
+    initMonacoEditor(text, getMonacoLanguage(extension));
+  }, 100);
+}
+
+// Initialize Monaco Editor
+function initMonacoEditor(content, language) {
+  // Clean up previous editor
+  if (currentMonacoEditor) {
+    currentMonacoEditor.dispose();
+    currentMonacoEditor = null;
+  }
+  
+  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+  require(['vs/editor/editor.main'], function() {
+    const container = document.getElementById('monaco-editor-container');
+    if (!container) return;
+    
+    currentMonacoEditor = monaco.editor.create(container, {
+      value: content,
+      language: language,
+      theme: 'vs',
+      readOnly: true,
+      automaticLayout: true,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      fontSize: 14,
+      lineNumbers: 'on',
+      renderWhitespace: 'selection',
+      wordWrap: 'on'
+    });
+  });
+}
+
+// Get Monaco language from file extension
+function getMonacoLanguage(ext) {
+  const languageMap = {
+    'js': 'javascript',
+    'jsx': 'javascript',
+    'ts': 'typescript',
+    'tsx': 'typescript',
+    'py': 'python',
+    'go': 'go',
+    'c': 'c',
+    'cpp': 'cpp',
+    'h': 'c',
+    'hpp': 'cpp',
+    'java': 'java',
+    'cs': 'csharp',
+    'php': 'php',
+    'rb': 'ruby',
+    'rs': 'rust',
+    'swift': 'swift',
+    'kt': 'kotlin',
+    'scala': 'scala',
+    'r': 'r',
+    'sh': 'shell',
+    'bash': 'shell',
+    'sql': 'sql',
+    'html': 'html',
+    'css': 'css',
+    'scss': 'scss',
+    'sass': 'sass',
+    'xml': 'xml',
+    'yaml': 'yaml',
+    'yml': 'yaml',
+    'json': 'json'
+  };
+  return languageMap[ext] || 'plaintext';
+}
+
+// Render image file
+async function renderImageFile(url, container) {
+  container.innerHTML = `
+    <div class="preview-container">
+      <div class="preview-image-content">
+        <img src="${url}" alt="Submitted image" />
+      </div>
+    </div>
+  `;
+}
+
+// Render media file
+async function renderMediaFile(url, container, extension) {
+  const isVideo = ['mp4', 'webm', 'mov', 'avi', 'mpeg'].includes(extension);
+  
+  container.innerHTML = `
+    <div class="preview-container">
+      <div class="preview-media-content">
+        ${isVideo ? 
+          `<video controls src="${url}" style="max-width: 100%; max-height: 600px;">Your browser does not support the video tag.</video>` :
+          `<audio controls src="${url}" style="width: 100%;">Your browser does not support the audio tag.</audio>`
+        }
+      </div>
+    </div>
+  `;
+}
+
+// Render PPTX placeholder
+function renderPPTXPlaceholder(container, filename) {
+  container.innerHTML = `
+    <div class="preview-container">
+      <div style="text-align: center; padding: 60px 20px;">
+        <div style="font-size: 64px; margin-bottom: 20px;">📊</div>
+        <h3>${filename}</h3>
+        <p style="color: #888; margin-top: 12px;">PowerPoint preview not available</p>
+        <p style="color: #888; font-size: 14px; margin-top: 8px;">File will be sent to AI for analysis</p>
+      </div>
+    </div>
+  `;
+}
+
+// Render unsupported file
+function renderUnsupportedFile(container, filename, url) {
+  container.innerHTML = `
+    <div class="preview-container">
+      <div style="text-align: center; padding: 60px 20px;">
+        <div style="font-size: 64px; margin-bottom: 20px;">📄</div>
+        <h3>${filename}</h3>
+        <p style="color: #888; margin-top: 12px;">Preview not available for this file type</p>
+        <a href="${url}" download style="display: inline-block; margin-top: 20px; padding: 12px 24px; background: #000; color: white; text-decoration: none; border-radius: 8px;">Download File</a>
+      </div>
+    </div>
+  `;
+}
+
+// Helper: Escape HTML
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Submit grade (placeholder)
+function submitGrade() {
+  const score = document.getElementById('grading-score').value;
+  const feedback = document.getElementById('grading-feedback').value;
+  
+  if (!score) {
+    alert('Please enter a score');
+    return;
+  }
+  
+  alert(`Grade submission:\nScore: ${score}\nFeedback: ${feedback.substring(0, 100)}...\n\n(Grade submission to Canvas API to be implemented)`);
+  
+  closeGradingModal();
 }
 
 // View submission details (placeholder for now)

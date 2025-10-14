@@ -8,11 +8,29 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Forum&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="dashboard.css">
+  
   <!-- PDF.js for PDF rendering -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   </script>
+  
+  <!-- SheetJS for Excel/CSV -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  
+  <!-- Marked.js for Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  
+  <!-- Monaco Editor for Code -->
+  <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css">
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+  
+  <!-- Mammoth for DOCX -->
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+  
+  <!-- KaTeX for LaTeX rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 </head>
 <body>
   <div class="app-container">
@@ -246,6 +264,68 @@ Example: 'Be encouraging in your feedback. Focus on helping students learn rathe
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- Grading Modal -->
+  <div id="grading-modal" class="grading-modal" style="display: none;">
+    <div class="grading-modal-content">
+      <div class="grading-modal-header">
+        <div class="grading-modal-title">
+          <h2 id="grading-student-name">Student Name</h2>
+          <p id="grading-assignment-name">Assignment Name</p>
+        </div>
+        <button class="modal-close-btn" onclick="closeGradingModal()">✕</button>
+      </div>
+      
+      <div class="grading-modal-body">
+        <!-- Left: File Preview -->
+        <div class="grading-preview-panel">
+          <div class="grading-preview-header">
+            <h3>Submission Preview</h3>
+            <div id="grading-file-list" class="grading-file-tabs">
+              <!-- File tabs will be added here -->
+            </div>
+          </div>
+          <div id="grading-preview-content" class="grading-preview-content">
+            <div class="loading-message">
+              <p>Loading submission...</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Right: Grading Panel -->
+        <div class="grading-input-panel">
+          <div class="grading-section">
+            <h3>Rubric</h3>
+            <div id="grading-rubric-content" class="grading-rubric-display">
+              <p style="color: #888;">No rubric found for this assignment</p>
+            </div>
+          </div>
+          
+          <div class="grading-section">
+            <h3>AI Feedback</h3>
+            <button id="generate-ai-feedback-btn" class="ai-generate-btn">
+              ✨ Generate AI Feedback
+            </button>
+            <textarea id="grading-feedback" class="grading-textarea" rows="8" placeholder="AI-generated feedback will appear here..."></textarea>
+          </div>
+          
+          <div class="grading-section">
+            <h3>Grade</h3>
+            <div class="grade-input-group">
+              <input type="number" id="grading-score" class="grade-input" placeholder="Score" step="0.01" min="0" />
+              <span class="grade-separator">/</span>
+              <input type="number" id="grading-max-score" class="grade-input" placeholder="Max" readonly />
+            </div>
+          </div>
+          
+          <div class="grading-actions">
+            <button class="grading-action-btn cancel" onclick="closeGradingModal()">Cancel</button>
+            <button class="grading-action-btn submit" onclick="submitGrade()">Submit Grade</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="dashboard.js"></script>
