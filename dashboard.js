@@ -307,9 +307,16 @@ async function getUngradedCountForCourse(courseId) {
     const assignments = await response.json();
     let totalUngraded = 0;
 
-    // Sum up needs_grading_count from all assignments
+    // Sum up needs_grading_count from all assignments, excluding quizzes
     for (const assignment of assignments) {
-      totalUngraded += assignment.needs_grading_count || 0;
+      // Skip quizzes (online_quiz or none submission types)
+      const isQuiz = assignment.submission_types && 
+                     (assignment.submission_types.includes('online_quiz') || 
+                      assignment.submission_types.includes('none'));
+      
+      if (!isQuiz) {
+        totalUngraded += assignment.needs_grading_count || 0;
+      }
     }
 
     return totalUngraded;
