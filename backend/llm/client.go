@@ -82,7 +82,7 @@ type openAIResponse struct {
 
 // Call OpenAI API
 func callOpenAI(req GradingRequest) (string, error) {
-	systemContent := "You are an expert teaching assistant helping to grade student assignments. Provide constructive, detailed feedback."
+	systemContent := "You are a teaching assistant helping to grade student assignments. Provide constructive, detailed feedback."
 	if req.SystemPrompt != "" {
 		systemContent = req.SystemPrompt
 	}
@@ -172,7 +172,7 @@ type anthropicResponse struct {
 
 // Call Anthropic Claude API
 func callAnthropic(req GradingRequest) (string, error) {
-	systemContent := "You are an expert teaching assistant helping to grade student assignments. Provide constructive, detailed feedback."
+	systemContent := "You are a teaching assistant helping to grade student assignments. Provide constructive, detailed feedback."
 	if req.SystemPrompt != "" {
 		systemContent = req.SystemPrompt
 	}
@@ -272,7 +272,7 @@ type geminiResponse struct {
 
 // Call Google Gemini API
 func callGoogleGemini(req GradingRequest) (string, error) {
-	systemContent := "You are an expert teaching assistant helping to grade student assignments. Provide constructive, detailed feedback."
+	systemContent := "You are a teaching assistant helping to grade student assignments. Provide constructive, detailed feedback."
 	if req.SystemPrompt != "" {
 		systemContent = req.SystemPrompt
 	}

@@ -213,3 +213,34 @@ func (c *Client) GetCoursesWithUngradedCount() ([]CourseWithStats, error) {
 
 	return coursesWithStats, nil
 }
+
+// GetCourseEnrollments fetches active student enrollments for a course
+func (c *Client) GetCourseEnrollments(courseID string) ([]Enrollment, error) {
+	url := fmt.Sprintf("%s/api/v1/courses/%s/enrollments?type[]=StudentEnrollment&state[]=active&per_page=100", c.BaseURL, courseID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("canvas API error: %s - %s", resp.Status, string(body))
+	}
+
+	var enrollments []Enrollment
+	if err := json.NewDecoder(resp.Body).Decode(&enrollments); err != nil {
+		return nil, err
+	}
+
+	return enrollments, nil
+}

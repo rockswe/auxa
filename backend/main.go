@@ -36,6 +36,7 @@ func main() {
 		api.GET("/courses/:course_id/assignments", getCourseAssignments)
 		api.GET("/courses/:course_id/assignments/:assignment_id/submissions", getAssignmentSubmissions)
 		api.GET("/courses/:course_id/assignments/:assignment_id/ungraded", getUngradedSubmissions)
+		api.GET("/courses/:course_id/enrollments", getCourseEnrollments)
 
 		// LLM API routes
 		api.POST("/llm/generate-feedback", generateAIFeedback)
@@ -195,4 +196,25 @@ func generateAIFeedback(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// Get course enrollments (students)
+func getCourseEnrollments(c *gin.Context) {
+	courseID := c.Param("course_id")
+	token := c.GetHeader("Authorization")
+	schoolURL := c.GetHeader("X-School-URL")
+
+	if token == "" || schoolURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing credentials"})
+		return
+	}
+
+	client := canvas.NewClient(token, schoolURL)
+	enrollments, err := client.GetCourseEnrollments(courseID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, enrollments)
 }

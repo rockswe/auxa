@@ -13,6 +13,30 @@ type User struct {
 	LoginID      string `json:"login_id"`
 }
 
+// Enrollment represents a Canvas course enrollment
+type Enrollment struct {
+	ID                             int    `json:"id"`
+	UserID                         int    `json:"user_id"`
+	CourseID                       int    `json:"course_id"`
+	Type                           string `json:"type"`
+	EnrollmentState                string `json:"enrollment_state"`
+	Role                           string `json:"role"`
+	RoleID                         int    `json:"role_id"`
+	LimitPrivilegesToCourseSection bool   `json:"limit_privileges_to_course_section"`
+	User                           User   `json:"user"`
+	Grades                         *struct {
+		HTMLURL              string  `json:"html_url"`
+		CurrentScore         float64 `json:"current_score"`
+		CurrentGrade         string  `json:"current_grade"`
+		FinalScore           float64 `json:"final_score"`
+		FinalGrade           string  `json:"final_grade"`
+		UnpostedCurrentScore float64 `json:"unposted_current_score"`
+		UnpostedCurrentGrade string  `json:"unposted_current_grade"`
+		UnpostedFinalScore   float64 `json:"unposted_final_score"`
+		UnpostedFinalGrade   string  `json:"unposted_final_grade"`
+	} `json:"grades"`
+}
+
 // Course represents a Canvas course
 type Course struct {
 	ID               int        `json:"id"`

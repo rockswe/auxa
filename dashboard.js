@@ -1720,8 +1720,135 @@ function submitGrade() {
 }
 
 // View submission details (placeholder for now)
-function viewSubmissionDetails(submission) {
-  alert(`View details for submission\n\nStudent: ${submission.user ? submission.user.name : 'Unknown'}\nType: ${submission.submission_type}\n\n(Detailed view to be implemented)`);
+async function viewSubmissionDetails(submission) {
+  const modal = document.getElementById('student-details-modal');
+  const title = document.getElementById('student-details-title');
+  const body = document.getElementById('student-details-body');
+  
+  // Show modal with loading state
+  modal.style.display = 'flex';
+  title.textContent = 'Student Details';
+  body.innerHTML = '<div class="loading-message"><p>Loading student details...</p></div>';
+  
+  try {
+    // Get student details from submission
+    const student = submission.user;
+    const courseId = currentGradingContext.courseId || submission.course_id;
+    
+    // Fetch course enrollments
+    const enrollments = await fetchCourseEnrollments(courseId);
+    
+    // Find this student's enrollment
+    const studentEnrollment = enrollments.find(e => e.user_id === student.id);
+    
+    // Build the details HTML
+    let detailsHTML = `
+      <div class="student-info-card">
+        <h3>Student Information</h3>
+        <div class="student-info-row">
+          <span class="student-info-label">Name:</span>
+          <span class="student-info-value">${student.name || 'N/A'}</span>
+        </div>
+        <div class="student-info-row">
+          <span class="student-info-label">Email:</span>
+          <span class="student-info-value">${student.email || 'N/A'}</span>
+        </div>
+        <div class="student-info-row">
+          <span class="student-info-label">Login ID:</span>
+          <span class="student-info-value">${student.login_id || 'N/A'}</span>
+        </div>
+        <div class="student-info-row">
+          <span class="student-info-label">Student ID:</span>
+          <span class="student-info-value">${student.id}</span>
+        </div>
+      </div>
+      
+      <div class="student-info-card">
+        <h3>Submission Information</h3>
+        <div class="student-info-row">
+          <span class="student-info-label">Type:</span>
+          <span class="student-info-value">${submission.submission_type || 'N/A'}</span>
+        </div>
+        <div class="student-info-row">
+          <span class="student-info-label">Submitted At:</span>
+          <span class="student-info-value">${submission.submitted_at ? new Date(submission.submitted_at).toLocaleString() : 'Not submitted'}</span>
+        </div>
+        <div class="student-info-row">
+          <span class="student-info-label">Status:</span>
+          <span class="student-info-value">${submission.workflow_state || 'N/A'}</span>
+        </div>
+        <div class="student-info-row">
+          <span class="student-info-label">Late:</span>
+          <span class="student-info-value">${submission.late ? 'Yes' : 'No'}</span>
+        </div>
+        <div class="student-info-row">
+          <span class="student-info-label">Current Grade:</span>
+          <span class="student-info-value">${submission.grade || 'Not graded'}</span>
+        </div>
+        <div class="student-info-row">
+          <span class="student-info-label">Score:</span>
+          <span class="student-info-value">${submission.score || '0'}</span>
+        </div>
+      </div>
+    `;
+    
+    // Add enrollment information if available
+    if (studentEnrollment && studentEnrollment.grades) {
+      detailsHTML += `
+        <div class="student-info-card">
+          <h3>Course Grade</h3>
+          <div class="student-info-row">
+            <span class="student-info-label">Current Grade:</span>
+            <span class="student-info-value">${studentEnrollment.grades.current_grade || 'N/A'} (${studentEnrollment.grades.current_score || 0}%)</span>
+          </div>
+          <div class="student-info-row">
+            <span class="student-info-label">Final Grade:</span>
+            <span class="student-info-value">${studentEnrollment.grades.final_grade || 'N/A'} (${studentEnrollment.grades.final_score || 0}%)</span>
+          </div>
+        </div>
+      `;
+    }
+    
+    body.innerHTML = detailsHTML;
+    
+  } catch (error) {
+    console.error('Error loading student details:', error);
+    body.innerHTML = `
+      <div class="error-message" style="padding: 20px; text-align: center; color: #d32f2f;">
+        <p>Error loading student details: ${error.message}</p>
+        <p style="font-size: 14px; color: #666;">Please try again later.</p>
+      </div>
+    `;
+  }
+}
+
+// Fetch course enrollments
+async function fetchCourseEnrollments(courseId) {
+  const credentials = await window.api.getCredentials();
+  
+  if (!credentials || !credentials.token || !credentials.school) {
+    throw new Error('Canvas credentials not found');
+  }
+  
+  const response = await fetch(`http://localhost:3000/api/courses/${courseId}/enrollments`, {
+    method: 'GET',
+    headers: {
+      'Authorization': credentials.token,
+      'X-School-URL': credentials.school
+    }
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch enrollments');
+  }
+  
+  return await response.json();
+}
+
+// Close student details modal
+function closeStudentDetailsModal() {
+  const modal = document.getElementById('student-details-modal');
+  modal.style.display = 'none';
 }
 
 // Get system prompt for AI grading
