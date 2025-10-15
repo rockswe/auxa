@@ -15,6 +15,8 @@ type GradingRequest struct {
 	APIKey       string  `json:"api_key"`
 	Prompt       string  `json:"prompt"`
 	SystemPrompt string  `json:"system_prompt"`
+	TextModel    string  `json:"text_model"`
+	AudioModel   string  `json:"audio_model"`
 	MaxTokens    int     `json:"max_tokens"`
 	Temperature  float64 `json:"temperature"`
 }
@@ -85,8 +87,14 @@ func callOpenAI(req GradingRequest) (string, error) {
 		systemContent = req.SystemPrompt
 	}
 
+	// Use the specified model or default to gpt-4o
+	model := req.TextModel
+	if model == "" {
+		model = "gpt-4o"
+	}
+
 	requestBody := openAIRequest{
-		Model: "gpt-4o",
+		Model: model,
 		Messages: []openAIMessage{
 			{Role: "system", Content: systemContent},
 			{Role: "user", Content: req.Prompt},
@@ -171,8 +179,14 @@ func callAnthropic(req GradingRequest) (string, error) {
 
 	fullPrompt := systemContent + "\n\n" + req.Prompt
 
+	// Use the specified model or default to claude-3-5-sonnet-20241022
+	model := req.TextModel
+	if model == "" {
+		model = "claude-3-5-sonnet-20241022"
+	}
+
 	requestBody := anthropicRequest{
-		Model:     "claude-3-5-sonnet-20241022",
+		Model:     model,
 		MaxTokens: req.MaxTokens,
 		Messages: []anthropicMessage{
 			{Role: "user", Content: fullPrompt},
@@ -265,6 +279,12 @@ func callGoogleGemini(req GradingRequest) (string, error) {
 
 	fullPrompt := systemContent + "\n\n" + req.Prompt
 
+	// Use the specified model or default to gemini-1.5-flash
+	model := req.TextModel
+	if model == "" {
+		model = "gemini-1.5-flash"
+	}
+
 	requestBody := geminiRequest{
 		Contents: []geminiContent{
 			{
@@ -284,7 +304,7 @@ func callGoogleGemini(req GradingRequest) (string, error) {
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=%s", req.APIKey)
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, req.APIKey)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)

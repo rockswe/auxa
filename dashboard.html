@@ -251,6 +251,22 @@
               <span class="setting-help">Your API key is stored securely and encrypted</span>
             </div>
             
+            <div class="setting-item" id="text-model-section" style="display: none;">
+              <label for="ai-text-model">Text Model</label>
+              <select id="ai-text-model" class="setting-select">
+                <option value="">Select a model...</option>
+              </select>
+              <span class="setting-help">Choose the AI model for grading text submissions</span>
+            </div>
+            
+            <div class="setting-item" id="audio-model-section" style="display: none;">
+              <label for="ai-audio-model">Audio/Video Model (Optional)</label>
+              <select id="ai-audio-model" class="setting-select">
+                <option value="">Select a model...</option>
+              </select>
+              <span class="setting-help">Choose the model for transcribing audio/video submissions</span>
+            </div>
+            
             <div class="setting-item" id="system-prompt-section" style="display: none;">
               <label for="ai-system-prompt">Custom System Prompt (Optional)</label>
               <textarea id="ai-system-prompt" class="setting-textarea" rows="6" placeholder="Enter custom instructions for the AI. This will be combined with the grading rubric to guide how the AI grades submissions.
@@ -305,7 +321,7 @@ Example: 'Be encouraging in your feedback. Focus on helping students learn rathe
           <div class="grading-section">
             <h3>AI Feedback</h3>
             <button id="generate-ai-feedback-btn" class="ai-generate-btn">
-              ✨ Generate AI Feedback
+              Generate AI Feedback
             </button>
             <textarea id="grading-feedback" class="grading-textarea" rows="8" placeholder="AI-generated feedback will appear here..."></textarea>
           </div>

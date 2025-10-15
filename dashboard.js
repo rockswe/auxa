@@ -68,11 +68,50 @@ function initSettings() {
   initAISettings();
 }
 
+// Model options for each platform
+const AI_MODELS = {
+  openai: {
+    text: [
+      { value: 'gpt-4o', label: 'GPT-4o (Recommended)' },
+      { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Faster)' },
+      { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+      { value: 'gpt-4', label: 'GPT-4' },
+      { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' }
+    ],
+    audio: [
+      { value: 'whisper-1', label: 'Whisper v3' }
+    ]
+  },
+  anthropic: {
+    text: [
+      { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (Recommended)' },
+      { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku (Faster)' },
+      { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' }
+    ],
+    audio: [] // Anthropic doesn't support audio
+  },
+  google: {
+    text: [
+      { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Recommended)' },
+      { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Faster)' },
+      { value: 'gemini-1.0-pro', label: 'Gemini 1.0 Pro' }
+    ],
+    audio: [
+      { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Native Audio)' },
+      { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Native Audio)' }
+    ]
+  }
+};
+
 // Initialize AI platform settings
 function initAISettings() {
   const platformSelect = document.getElementById('ai-platform-select');
   const apiKeySection = document.getElementById('api-key-section');
   const apiKeyInput = document.getElementById('ai-api-key');
+  const textModelSection = document.getElementById('text-model-section');
+  const textModelSelect = document.getElementById('ai-text-model');
+  const audioModelSection = document.getElementById('audio-model-section');
+  const audioModelSelect = document.getElementById('ai-audio-model');
   const systemPromptSection = document.getElementById('system-prompt-section');
   const systemPromptInput = document.getElementById('ai-system-prompt');
   const saveBtn = document.getElementById('save-ai-settings');
@@ -80,20 +119,39 @@ function initAISettings() {
   // Load saved AI settings
   const savedPlatform = localStorage.getItem('aiPlatform');
   const savedApiKey = localStorage.getItem('aiApiKey');
+  const savedTextModel = localStorage.getItem('aiTextModel');
+  const savedAudioModel = localStorage.getItem('aiAudioModel');
   const savedSystemPrompt = localStorage.getItem('aiSystemPrompt');
   
   if (savedPlatform) {
     platformSelect.value = savedPlatform;
     apiKeySection.style.display = 'block';
+    textModelSection.style.display = 'block';
     systemPromptSection.style.display = 'block';
     saveBtn.style.display = 'block';
     
     // Show platform info
     showPlatformInfo(savedPlatform);
     
+    // Populate model dropdowns
+    populateModelDropdowns(savedPlatform);
+    
+    // Show audio model section if platform supports it
+    if (AI_MODELS[savedPlatform].audio.length > 0) {
+      audioModelSection.style.display = 'block';
+    }
+    
     if (savedApiKey) {
       apiKeyInput.value = '••••••••••••••••';
       apiKeyInput.setAttribute('data-has-key', 'true');
+    }
+    
+    if (savedTextModel) {
+      textModelSelect.value = savedTextModel;
+    }
+    
+    if (savedAudioModel) {
+      audioModelSelect.value = savedAudioModel;
     }
     
     if (savedSystemPrompt) {
@@ -107,15 +165,28 @@ function initAISettings() {
     
     if (platform) {
       apiKeySection.style.display = 'block';
+      textModelSection.style.display = 'block';
       systemPromptSection.style.display = 'block';
       saveBtn.style.display = 'block';
       apiKeyInput.value = '';
       apiKeyInput.removeAttribute('data-has-key');
       
+      // Populate model dropdowns
+      populateModelDropdowns(platform);
+      
+      // Show/hide audio model section based on platform
+      if (AI_MODELS[platform].audio.length > 0) {
+        audioModelSection.style.display = 'block';
+      } else {
+        audioModelSection.style.display = 'none';
+      }
+      
       // Show platform-specific warnings/info
       showPlatformInfo(platform);
     } else {
       apiKeySection.style.display = 'none';
+      textModelSection.style.display = 'none';
+      audioModelSection.style.display = 'none';
       systemPromptSection.style.display = 'none';
       saveBtn.style.display = 'none';
       document.getElementById('platform-warning').style.display = 'none';
@@ -134,6 +205,8 @@ function initAISettings() {
   saveBtn.addEventListener('click', async () => {
     const platform = platformSelect.value;
     const apiKey = apiKeyInput.value.trim();
+    const textModel = textModelSelect.value;
+    const audioModel = audioModelSelect.value;
     const systemPrompt = systemPromptInput.value.trim();
     
     if (!platform) {
@@ -141,10 +214,17 @@ function initAISettings() {
       return;
     }
     
+    if (!textModel) {
+      alert('Please select a text model');
+      return;
+    }
+    
     // If no new key entered and we have an existing key, keep it
     if (!apiKey && apiKeyInput.getAttribute('data-has-key') === 'true') {
       alert('LLM API platform updated (API key unchanged)');
       localStorage.setItem('aiPlatform', platform);
+      localStorage.setItem('aiTextModel', textModel);
+      localStorage.setItem('aiAudioModel', audioModel);
       localStorage.setItem('aiSystemPrompt', systemPrompt);
       return;
     }
@@ -163,6 +243,8 @@ function initAISettings() {
     // Save to localStorage (in production, use secure storage like Canvas credentials)
     localStorage.setItem('aiPlatform', platform);
     localStorage.setItem('aiApiKey', apiKey);
+    localStorage.setItem('aiTextModel', textModel);
+    localStorage.setItem('aiAudioModel', audioModel);
     localStorage.setItem('aiSystemPrompt', systemPrompt);
     
     // Update UI
@@ -170,7 +252,37 @@ function initAISettings() {
     apiKeyInput.setAttribute('data-has-key', 'true');
     
     alert('AI settings saved successfully!\n\nPlatform: ' + getPlatformName(platform) + 
+          '\nText Model: ' + textModel +
+          (audioModel ? '\nAudio Model: ' + audioModel : '') +
           (systemPrompt ? '\nCustom system prompt saved' : '\nUsing default system prompt'));
+  });
+}
+
+// Populate model dropdowns based on platform
+function populateModelDropdowns(platform) {
+  const textModelSelect = document.getElementById('ai-text-model');
+  const audioModelSelect = document.getElementById('ai-audio-model');
+  
+  // Clear existing options (except the first "Select a model..." option)
+  textModelSelect.innerHTML = '<option value="">Select a model...</option>';
+  audioModelSelect.innerHTML = '<option value="">Select a model...</option>';
+  
+  if (!platform || !AI_MODELS[platform]) return;
+  
+  // Populate text models
+  AI_MODELS[platform].text.forEach(model => {
+    const option = document.createElement('option');
+    option.value = model.value;
+    option.textContent = model.label;
+    textModelSelect.appendChild(option);
+  });
+  
+  // Populate audio models (if available)
+  AI_MODELS[platform].audio.forEach(model => {
+    const option = document.createElement('option');
+    option.value = model.value;
+    option.textContent = model.label;
+    audioModelSelect.appendChild(option);
   });
 }
 
@@ -1345,6 +1457,11 @@ async function generateAIFeedback() {
     return;
   }
   
+  if (!aiConfig.textModel) {
+    alert('Please select a text model in Settings first.');
+    return;
+  }
+  
   // Disable button and show loading
   generateBtn.disabled = true;
   generateBtn.textContent = '⏳ Generating Feedback...';
@@ -1361,7 +1478,14 @@ async function generateAIFeedback() {
     const prompt = buildGradingPrompt(submissionContent, rubricContent, aiConfig.systemPrompt);
     
     // Call backend API to generate feedback
-    const feedback = await callBackendLLM(aiConfig.platform, prompt, aiConfig.apiKey, aiConfig.systemPrompt);
+    const feedback = await callBackendLLM(
+      aiConfig.platform, 
+      prompt, 
+      aiConfig.apiKey, 
+      aiConfig.systemPrompt,
+      aiConfig.textModel,
+      aiConfig.audioModel
+    );
     
     // Display feedback
     feedbackTextarea.value = feedback;
@@ -1503,7 +1627,7 @@ function buildGradingPrompt(submissionContent, rubricContent, customSystemPrompt
 }
 
 // Call backend LLM API
-async function callBackendLLM(platform, prompt, apiKey, systemPrompt) {
+async function callBackendLLM(platform, prompt, apiKey, systemPrompt, textModel, audioModel) {
   const response = await fetch('http://localhost:3000/api/llm/generate-feedback', {
     method: 'POST',
     headers: {
@@ -1514,6 +1638,8 @@ async function callBackendLLM(platform, prompt, apiKey, systemPrompt) {
       api_key: apiKey,
       prompt: prompt,
       system_prompt: systemPrompt || '',
+      text_model: textModel,
+      audio_model: audioModel || '',
       temperature: 0.7,
       max_tokens: 2000
     })
@@ -1574,6 +1700,8 @@ function getAIConfig() {
   return {
     platform: localStorage.getItem('aiPlatform') || null,
     apiKey: localStorage.getItem('aiApiKey') || null,
+    textModel: localStorage.getItem('aiTextModel') || null,
+    audioModel: localStorage.getItem('aiAudioModel') || null,
     systemPrompt: localStorage.getItem('aiSystemPrompt') || ''
   };
 }
