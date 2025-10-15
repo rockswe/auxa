@@ -1823,17 +1823,15 @@ async function viewSubmissionDetails(submission, courseId) {
 
 // Fetch course enrollments
 async function fetchCourseEnrollments(courseId) {
-  const credentials = await window.api.getCredentials();
-  
-  if (!credentials || !credentials.token || !credentials.school) {
+  if (!userCredentials || !userCredentials.token || !userCredentials.school) {
     throw new Error('Canvas credentials not found');
   }
   
   const response = await fetch(`http://localhost:3000/api/courses/${courseId}/enrollments`, {
     method: 'GET',
     headers: {
-      'Authorization': credentials.token,
-      'X-School-URL': credentials.school
+      'Authorization': userCredentials.token,
+      'X-School-URL': userCredentials.school
     }
   });
   
