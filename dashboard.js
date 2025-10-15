@@ -1360,21 +1360,8 @@ async function generateAIFeedback() {
     // Build prompt
     const prompt = buildGradingPrompt(submissionContent, rubricContent, aiConfig.systemPrompt);
     
-    // Call appropriate LLM API
-    let feedback;
-    switch (aiConfig.platform) {
-      case 'openai':
-        feedback = await callOpenAI(prompt, aiConfig.apiKey);
-        break;
-      case 'anthropic':
-        feedback = await callAnthropic(prompt, aiConfig.apiKey);
-        break;
-      case 'google':
-        feedback = await callGoogleGemini(prompt, aiConfig.apiKey);
-        break;
-      default:
-        throw new Error('Unknown AI platform');
-    }
+    // Call backend API to generate feedback
+    const feedback = await callBackendLLM(aiConfig.platform, prompt, aiConfig.apiKey, aiConfig.systemPrompt);
     
     // Display feedback
     feedbackTextarea.value = feedback;
@@ -1515,26 +1502,18 @@ function buildGradingPrompt(submissionContent, rubricContent, customSystemPrompt
   return prompt;
 }
 
-// Call OpenAI API
-async function callOpenAI(prompt, apiKey) {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+// Call backend LLM API
+async function callBackendLLM(platform, prompt, apiKey, systemPrompt) {
+  const response = await fetch('http://localhost:3000/api/llm/generate-feedback', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert teaching assistant helping to grade student assignments. Provide constructive, detailed feedback.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
+      platform: platform,
+      api_key: apiKey,
+      prompt: prompt,
+      system_prompt: systemPrompt || '',
       temperature: 0.7,
       max_tokens: 2000
     })
@@ -1542,70 +1521,16 @@ async function callOpenAI(prompt, apiKey) {
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error?.message || 'OpenAI API request failed');
+    throw new Error(error.error || 'Backend API request failed');
   }
   
   const data = await response.json();
-  return data.choices[0].message.content;
-}
-
-// Call Anthropic Claude API
-async function callAnthropic(prompt, apiKey) {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 2000,
-      messages: [
-        {
-          role: 'user',
-          content: `You are an expert teaching assistant helping to grade student assignments. Provide constructive, detailed feedback.\n\n${prompt}`
-        }
-      ]
-    })
-  });
   
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'Anthropic API request failed');
+  if (data.error) {
+    throw new Error(data.error);
   }
   
-  const data = await response.json();
-  return data.content[0].text;
-}
-
-// Call Google Gemini API
-async function callGoogleGemini(prompt, apiKey) {
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{
-          text: `You are an expert teaching assistant helping to grade student assignments. Provide constructive, detailed feedback.\n\n${prompt}`
-        }]
-      }],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2000
-      }
-    })
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'Google Gemini API request failed');
-  }
-  
-  const data = await response.json();
-  return data.candidates[0].content.parts[0].text;
+  return data.feedback;
 }
 
 // Extract and set score from feedback

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"auxa/canvas"
+	"auxa/llm"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -35,6 +36,9 @@ func main() {
 		api.GET("/courses/:course_id/assignments", getCourseAssignments)
 		api.GET("/courses/:course_id/assignments/:assignment_id/submissions", getAssignmentSubmissions)
 		api.GET("/courses/:course_id/assignments/:assignment_id/ungraded", getUngradedSubmissions)
+
+		// LLM API routes
+		api.POST("/llm/generate-feedback", generateAIFeedback)
 	}
 
 	log.Println("Server starting on http://localhost:3000")
@@ -153,4 +157,42 @@ func getUngradedSubmissions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, submissions)
+}
+
+// Generate AI feedback for grading
+func generateAIFeedback(c *gin.Context) {
+	var req llm.GradingRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate required fields
+	if req.Platform == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Platform is required"})
+		return
+	}
+
+	if req.APIKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "API key is required"})
+		return
+	}
+
+	if req.Prompt == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Prompt is required"})
+		return
+	}
+
+	// Generate feedback
+	response, err := llm.GenerateFeedback(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":    err.Error(),
+			"feedback": "",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }
