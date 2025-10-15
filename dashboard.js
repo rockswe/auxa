@@ -718,6 +718,25 @@ async function loadSubmissionsView(courseId, assignmentId) {
   }
 }
 
+// Create avatar HTML component
+function createAvatarHTML(avatarUrl, name) {
+  if (avatarUrl) {
+    return `<img src="${avatarUrl}" alt="${name}" class="user-avatar" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" /><div class="user-avatar-fallback" style="display: none;">${getInitials(name)}</div>`;
+  } else {
+    return `<div class="user-avatar-fallback">${getInitials(name)}</div>`;
+  }
+}
+
+// Get initials from name for avatar fallback
+function getInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+}
+
 // Create submission card element
 function createSubmissionCard(submission, courseId, assignmentId) {
   const card = document.createElement('div');
@@ -733,12 +752,17 @@ function createSubmissionCard(submission, courseId, assignmentId) {
   // Get student info
   const studentName = submission.user ? submission.user.name : 'Unknown Student';
   const studentEmail = submission.user ? submission.user.email : '';
+  const avatarUrl = submission.user?.avatar_url;
+  
+  // Create avatar HTML
+  const avatarHTML = createAvatarHTML(avatarUrl, studentName);
   
   // Determine submission content preview
   const contentPreview = getSubmissionContentPreview(submission);
   
   card.innerHTML = `
     <div class="submission-header">
+      ${avatarHTML}
       <div class="submission-student-info">
         <div class="submission-student-name">${studentName}</div>
         <div class="submission-student-email">${studentEmail}</div>

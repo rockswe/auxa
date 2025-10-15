@@ -159,7 +159,8 @@ func (c *Client) GetUngradedSubmissions(courseID, assignmentID string) ([]Submis
 	}
 
 	// Filter for ungraded submissions
-	var ungradedSubmissions []Submission
+	// Initialize as empty slice to ensure JSON returns [] instead of null
+	ungradedSubmissions := make([]Submission, 0)
 	for _, submission := range allSubmissions {
 		// Check if submission is ungraded
 		// Ungraded: grader_id is null/0, no grade posted, and workflow_state is "submitted"
