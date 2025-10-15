@@ -759,7 +759,7 @@ function createSubmissionCard(submission, courseId, assignmentId) {
       <button class="submission-action-btn primary" onclick="gradeSubmission(${courseId}, ${assignmentId}, ${submission.id}, ${submission.user_id})">
         Grade Submission
       </button>
-      <button class="submission-action-btn secondary" onclick="viewSubmissionDetails(${JSON.stringify(submission).replace(/"/g, '&quot;')})">
+      <button class="submission-action-btn secondary" onclick="viewSubmissionDetails(${JSON.stringify(submission).replace(/"/g, '&quot;')}, ${courseId})">
         View Details
       </button>
     </div>
@@ -1720,7 +1720,7 @@ function submitGrade() {
 }
 
 // View submission details (placeholder for now)
-async function viewSubmissionDetails(submission) {
+async function viewSubmissionDetails(submission, courseId) {
   const modal = document.getElementById('student-details-modal');
   const title = document.getElementById('student-details-title');
   const body = document.getElementById('student-details-body');
@@ -1733,7 +1733,6 @@ async function viewSubmissionDetails(submission) {
   try {
     // Get student details from submission
     const student = submission.user;
-    const courseId = currentGradingContext.courseId || submission.course_id;
     
     // Fetch course enrollments
     const enrollments = await fetchCourseEnrollments(courseId);
