@@ -133,6 +133,9 @@ function initAISettings() {
     // Show platform info
     showPlatformInfo(savedPlatform);
     
+    // Show appropriate API key link
+    showApiKeyLink(savedPlatform);
+    
     // Populate model dropdowns
     populateModelDropdowns(savedPlatform);
     
@@ -171,6 +174,9 @@ function initAISettings() {
       apiKeyInput.value = '';
       apiKeyInput.removeAttribute('data-has-key');
       
+      // Show appropriate API key link
+      showApiKeyLink(platform);
+      
       // Populate model dropdowns
       populateModelDropdowns(platform);
       
@@ -190,6 +196,9 @@ function initAISettings() {
       systemPromptSection.style.display = 'none';
       saveBtn.style.display = 'none';
       document.getElementById('platform-warning').style.display = 'none';
+      
+      // Hide all API key links
+      showApiKeyLink(null);
     }
   });
   
@@ -343,6 +352,31 @@ function showPlatformInfo(platform) {
   }
 }
 
+// Show appropriate API key link based on platform
+function showApiKeyLink(platform) {
+  const openaiLink = document.getElementById('openai-key-link');
+  const googleLink = document.getElementById('google-key-link');
+  const anthropicLink = document.getElementById('anthropic-key-link');
+  
+  // Hide all first
+  openaiLink.style.display = 'none';
+  googleLink.style.display = 'none';
+  anthropicLink.style.display = 'none';
+  
+  // Show appropriate one
+  switch(platform) {
+    case 'openai':
+      openaiLink.style.display = 'inline';
+      break;
+    case 'google':
+      googleLink.style.display = 'inline';
+      break;
+    case 'anthropic':
+      anthropicLink.style.display = 'inline';
+      break;
+  }
+}
+
 // Load courses from Canvas API via backend
 async function loadCourses() {
   const coursesList = document.getElementById('courses-list');
@@ -427,7 +461,7 @@ async function getUngradedCountForCourse(courseId) {
                       assignment.submission_types.includes('none'));
       
       if (!isQuiz) {
-        totalUngraded += assignment.needs_grading_count || 0;
+      totalUngraded += assignment.needs_grading_count || 0;
       }
     }
 

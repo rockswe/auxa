@@ -246,7 +246,12 @@
             </div>
             
             <div class="setting-item" id="api-key-section" style="display: none;">
-              <label for="ai-api-key">API Key</label>
+              <div class="setting-label-row">
+                <label for="ai-api-key">API Key</label>
+                <a href="https://platform.openai.com/api-keys" target="_blank" class="api-key-link" id="openai-key-link" style="display: none;">How do I generate an OpenAI API Key?</a>
+                <a href="https://aistudio.google.com/app/api-keys" target="_blank" class="api-key-link" id="google-key-link" style="display: none;">How do I generate a Google API Key?</a>
+                <a href="https://console.anthropic.com/settings/keys" target="_blank" class="api-key-link" id="anthropic-key-link" style="display: none;">How do I generate an Anthropic API Key?</a>
+              </div>
               <input type="password" id="ai-api-key" class="setting-input" placeholder="Enter your API key" />
               <span class="setting-help">Your API key is stored securely and encrypted</span>
             </div>
@@ -260,7 +265,7 @@
             </div>
             
             <div class="setting-item" id="audio-model-section" style="display: none;">
-              <label for="ai-audio-model">Audio/Video Model (Optional)</label>
+              <label for="ai-audio-model">Audio/Video Model</label>
               <select id="ai-audio-model" class="setting-select">
                 <option value="">Select a model...</option>
               </select>
