@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -46,6 +46,13 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
+
+  // Open external links in the system's default browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Open in external browser (Chrome, Safari, etc.)
+    shell.openExternal(url);
+    return { action: 'deny' }; // Prevent opening in Electron
+  });
 
   // Show window when ready to avoid visual flash
   mainWindow.once('ready-to-show', () => {
