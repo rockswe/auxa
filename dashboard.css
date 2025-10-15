@@ -1189,9 +1189,9 @@ body {
 .ai-generate-btn {
   width: 100%;
   padding: 12px 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
+  background: white;
+  color: #000;
+  border: 1px solid #000;
   border-radius: 8px;
   font-size: 15px;
   font-weight: 600;
@@ -1201,8 +1201,9 @@ body {
 }
 
 .ai-generate-btn:hover {
+  background: #f5f5f5;
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .ai-generate-btn:active {
