@@ -1194,6 +1194,7 @@ body {
   border: 1px solid #000;
   border-radius: 8px;
   font-size: 15px;
+  font-family: 'Forum', serif;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
