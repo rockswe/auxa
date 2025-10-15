@@ -133,6 +133,7 @@ func (c *Client) GetAssignmentSubmissions(courseID, assignmentID string) ([]Subm
 	params.Add("include[]", "rubric_assessment")
 	params.Add("include[]", "assignment")
 	params.Add("include[]", "user")
+	params.Add("include[]", "avatar_url")
 	params.Add("include[]", "visibility")
 	params.Add("per_page", "100")
 
@@ -216,7 +217,7 @@ func (c *Client) GetCoursesWithUngradedCount() ([]CourseWithStats, error) {
 
 // GetCourseEnrollments fetches active student enrollments for a course
 func (c *Client) GetCourseEnrollments(courseID string) ([]Enrollment, error) {
-	url := fmt.Sprintf("%s/api/v1/courses/%s/enrollments?type[]=StudentEnrollment&state[]=active&per_page=100", c.BaseURL, courseID)
+	url := fmt.Sprintf("%s/api/v1/courses/%s/enrollments?type[]=StudentEnrollment&state[]=active&include[]=avatar_url&per_page=100", c.BaseURL, courseID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
