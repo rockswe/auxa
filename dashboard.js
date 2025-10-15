@@ -424,8 +424,7 @@ async function loadCourseAssignmentsView(courseId) {
     if (ungradedAssignments.length === 0) {
       assignmentsList.innerHTML = `
         <div class="empty-message">
-          <p>No assignments with ungraded submissions</p>
-          <p style="font-size: 14px; color: #888; margin-top: 8px;">All caught up! 🎉</p>
+          <p>No assignments with ungraded submissions.</p>
         </div>
       `;
       return;
@@ -775,6 +774,10 @@ async function openGradingModal(submission, assignment) {
   document.getElementById('grading-file-list').innerHTML = '';
   document.getElementById('grading-feedback').value = '';
   document.getElementById('grading-score').value = '';
+  
+  // Setup AI feedback button
+  const aiFeedbackBtn = document.getElementById('generate-ai-feedback-btn');
+  aiFeedbackBtn.onclick = generateAIFeedback;
   
   // Show modal
   modal.style.display = 'flex';
@@ -1326,6 +1329,294 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// ========== AI FEEDBACK GENERATION ==========
+
+// Generate AI feedback for submission
+async function generateAIFeedback() {
+  const feedbackTextarea = document.getElementById('grading-feedback');
+  const generateBtn = document.getElementById('generate-ai-feedback-btn');
+  
+  // Check AI configuration
+  const aiConfig = getAIConfig();
+  if (!aiConfig.platform || !aiConfig.apiKey) {
+    alert('Please configure your AI platform and API key in Settings first.');
+    return;
+  }
+  
+  // Disable button and show loading
+  generateBtn.disabled = true;
+  generateBtn.textContent = '⏳ Generating Feedback...';
+  feedbackTextarea.value = 'Generating AI feedback, please wait...';
+  
+  try {
+    // Extract submission content
+    const submissionContent = await extractSubmissionContent();
+    
+    // Get rubric content
+    const rubricContent = getRubricContent();
+    
+    // Build prompt
+    const prompt = buildGradingPrompt(submissionContent, rubricContent, aiConfig.systemPrompt);
+    
+    // Call appropriate LLM API
+    let feedback;
+    switch (aiConfig.platform) {
+      case 'openai':
+        feedback = await callOpenAI(prompt, aiConfig.apiKey);
+        break;
+      case 'anthropic':
+        feedback = await callAnthropic(prompt, aiConfig.apiKey);
+        break;
+      case 'google':
+        feedback = await callGoogleGemini(prompt, aiConfig.apiKey);
+        break;
+      default:
+        throw new Error('Unknown AI platform');
+    }
+    
+    // Display feedback
+    feedbackTextarea.value = feedback;
+    
+    // Try to extract score if present
+    extractAndSetScore(feedback);
+    
+  } catch (error) {
+    console.error('Error generating AI feedback:', error);
+    feedbackTextarea.value = `Error generating feedback: ${error.message}\n\nPlease check your API key and try again.`;
+  } finally {
+    // Re-enable button
+    generateBtn.disabled = false;
+    generateBtn.textContent = '✨ Generate AI Feedback';
+  }
+}
+
+// Extract submission content based on type
+async function extractSubmissionContent() {
+  const submission = currentGradingContext.submission;
+  let content = '';
+  
+  if (submission.submission_type === 'online_text_entry') {
+    // Text submission
+    content = `TEXT SUBMISSION:\n${submission.body || 'No content'}`;
+  }
+  else if (submission.submission_type === 'online_upload') {
+    // File uploads
+    if (submission.attachments && submission.attachments.length > 0) {
+      content = 'SUBMITTED FILES:\n\n';
+      for (const file of submission.attachments) {
+        content += `File: ${file.filename}\n`;
+        content += `Type: ${file['content-type']}\n`;
+        content += `Size: ${formatFileSize(file.size)}\n`;
+        
+        // Try to fetch and include file content for text-based files
+        try {
+          const fileContent = await fetchFileContent(file.url, file.filename);
+          if (fileContent) {
+            content += `Content:\n${fileContent}\n`;
+          }
+        } catch (error) {
+          content += `(File content could not be extracted)\n`;
+        }
+        content += '\n---\n\n';
+      }
+    } else {
+      content = 'No files attached';
+    }
+  }
+  else if (submission.submission_type === 'online_url') {
+    content = `URL SUBMISSION:\n${submission.url}`;
+  }
+  else if (submission.submission_type === 'media_recording') {
+    content = 'MEDIA RECORDING:\nNote: This is an audio/video submission. Please review the media file manually.';
+  }
+  else {
+    content = `Submission type: ${submission.submission_type}`;
+  }
+  
+  return content;
+}
+
+// Fetch file content for text-based files
+async function fetchFileContent(url, filename) {
+  const extension = filename.split('.').pop().toLowerCase();
+  
+  // Only fetch content for text-based files
+  const textExtensions = ['txt', 'md', 'json', 'py', 'js', 'ts', 'jsx', 'tsx', 'go', 'c', 'cpp', 'h', 'hpp', 'java', 'cs', 'php', 'rb', 'rs', 'swift', 'kt', 'scala', 'r', 'sh', 'bash', 'sql', 'html', 'css', 'scss', 'xml', 'yaml', 'yml', 'csv', 'tex'];
+  
+  if (!textExtensions.includes(extension)) {
+    return null; // Don't fetch binary files
+  }
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    
+    const text = await response.text();
+    // Limit content length
+    if (text.length > 10000) {
+      return text.substring(0, 10000) + '\n\n... (content truncated)';
+    }
+    return text;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Get rubric content
+function getRubricContent() {
+  const rubrics = JSON.parse(localStorage.getItem('rubrics') || '[]');
+  const rubric = rubrics.find(r => r.assignmentId === currentGradingContext.assignmentId);
+  
+  if (rubric && rubric.type === 'text') {
+    return rubric.content;
+  }
+  
+  return null;
+}
+
+// Build grading prompt
+function buildGradingPrompt(submissionContent, rubricContent, customSystemPrompt) {
+  let prompt = '';
+  
+  // Add custom system prompt if provided
+  if (customSystemPrompt) {
+    prompt += `GRADING INSTRUCTIONS:\n${customSystemPrompt}\n\n`;
+  }
+  
+  // Add rubric if available
+  if (rubricContent) {
+    prompt += `GRADING RUBRIC:\n${rubricContent}\n\n`;
+  }
+  
+  // Add assignment context
+  const assignment = currentGradingContext.assignment;
+  const submission = currentGradingContext.submission;
+  
+  prompt += `ASSIGNMENT INFORMATION:\n`;
+  prompt += `Assignment: ${assignment.name}\n`;
+  prompt += `Maximum Points: ${assignment.points_possible}\n`;
+  prompt += `Student: ${submission.user ? submission.user.name : 'Unknown'}\n`;
+  prompt += `Submission Date: ${submission.submitted_at ? new Date(submission.submitted_at).toLocaleString() : 'Not submitted'}\n`;
+  prompt += `Late: ${submission.late ? 'Yes' : 'No'}\n\n`;
+  
+  // Add submission content
+  prompt += `STUDENT SUBMISSION:\n${submissionContent}\n\n`;
+  
+  // Add grading instructions
+  prompt += `Please review this student submission and provide:\n`;
+  prompt += `1. Detailed feedback on the work\n`;
+  prompt += `2. Strengths and areas for improvement\n`;
+  prompt += `3. A suggested grade (out of ${assignment.points_possible} points)\n`;
+  prompt += `4. Specific examples from the submission to support your feedback\n\n`;
+  prompt += `Format your response as:\nFEEDBACK: [your detailed feedback]\nSUGGESTED GRADE: [number]/[max points]`;
+  
+  return prompt;
+}
+
+// Call OpenAI API
+async function callOpenAI(prompt, apiKey) {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert teaching assistant helping to grade student assignments. Provide constructive, detailed feedback.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || 'OpenAI API request failed');
+  }
+  
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+// Call Anthropic Claude API
+async function callAnthropic(prompt, apiKey) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 2000,
+      messages: [
+        {
+          role: 'user',
+          content: `You are an expert teaching assistant helping to grade student assignments. Provide constructive, detailed feedback.\n\n${prompt}`
+        }
+      ]
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || 'Anthropic API request failed');
+  }
+  
+  const data = await response.json();
+  return data.content[0].text;
+}
+
+// Call Google Gemini API
+async function callGoogleGemini(prompt, apiKey) {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      contents: [{
+        parts: [{
+          text: `You are an expert teaching assistant helping to grade student assignments. Provide constructive, detailed feedback.\n\n${prompt}`
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 2000
+      }
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || 'Google Gemini API request failed');
+  }
+  
+  const data = await response.json();
+  return data.candidates[0].content.parts[0].text;
+}
+
+// Extract and set score from feedback
+function extractAndSetScore(feedback) {
+  // Try to find "SUGGESTED GRADE: X/Y" pattern
+  const scoreMatch = feedback.match(/SUGGESTED GRADE:\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/i);
+  
+  if (scoreMatch) {
+    const suggestedScore = parseFloat(scoreMatch[1]);
+    document.getElementById('grading-score').value = suggestedScore;
+  }
 }
 
 // Submit grade (placeholder)
