@@ -1,32 +1,102 @@
-const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, shell, dialog } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 
 let backendProcess = null;
 
 // Path to store encrypted credentials
 const credentialsPath = path.join(app.getPath('userData'), 'credentials.enc');
+const aiKeyPath = path.join(app.getPath('userData'), 'ai-key.enc');
 
 function startBackend() {
-  const backendPath = path.join(__dirname, 'backend', 'auxa-server');
-  
-  console.log('Starting backend server...');
-  backendProcess = spawn(backendPath, [], {
-    cwd: path.join(__dirname, 'backend')
-  });
+  const backendDir = path.join(__dirname, 'backend');
+  const binaryName = process.platform === 'win32' ? 'auxa-server.exe' : 'auxa-server';
+  const binaryPath = path.join(backendDir, binaryName);
 
-  backendProcess.stdout.on('data', (data) => {
-    console.log(`Backend: ${data}`);
-  });
+  ensurePortFree(3000);
 
-  backendProcess.stderr.on('data', (data) => {
-    console.error(`Backend Error: ${data}`);
-  });
+  const launchProcess = (command, args) => {
+    console.log(`Starting backend server with "${command} ${args.join(' ')}"`);
+    backendProcess = spawn(command, args, {
+      cwd: backendDir
+    });
 
-  backendProcess.on('close', (code) => {
-    console.log(`Backend process exited with code ${code}`);
-  });
+    backendProcess.stdout.on('data', (data) => {
+      console.log(`Backend: ${data}`);
+    });
+
+    backendProcess.stderr.on('data', (data) => {
+      console.error(`Backend Error: ${data}`);
+    });
+
+    backendProcess.on('error', (error) => {
+      console.error('Backend failed to start:', error);
+      dialog.showErrorBox('Backend Failed', `Failed to start backend process:\n\n${error.message}`);
+    });
+
+    backendProcess.on('close', (code) => {
+      console.log(`Backend process exited with code ${code}`);
+    });
+  };
+
+  if (fs.existsSync(binaryPath)) {
+    launchProcess(binaryPath, []);
+    return;
+  }
+
+  if (!app.isPackaged) {
+    console.warn(`Backend binary not found at ${binaryPath}. Falling back to "go run main.go" for development.`);
+    launchProcess('go', ['run', 'main.go']);
+    return;
+  }
+
+  const message = `Auxa backend binary was not found at:\n${binaryPath}\n\n` +
+    'Run "npm run build:backend" before starting the app.';
+  console.error(message);
+  dialog.showErrorBox('Backend Missing', message);
+}
+
+function ensurePortFree(port) {
+  try {
+    if (process.platform === 'win32') {
+      const output = execSync(`netstat -ano | findstr :${port}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      const pids = new Set();
+      output.split('\n').forEach(line => {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length > 0) {
+          const pid = parts[parts.length - 1];
+          if (pid && /^\d+$/.test(pid)) {
+            pids.add(pid);
+          }
+        }
+      });
+      pids.forEach(pid => {
+        try {
+          execSync(`taskkill /PID ${pid} /F`);
+          console.log(`Freed port ${port} by killing PID ${pid}`);
+        } catch (error) {
+          console.warn(`Failed to kill PID ${pid}: ${error.message}`);
+        }
+      });
+    } else {
+      const output = execSync(`lsof -ti :${port}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      output.split('\n').filter(Boolean).forEach(pid => {
+        try {
+          execSync(`kill -9 ${pid}`);
+          console.log(`Freed port ${port} by killing PID ${pid}`);
+        } catch (error) {
+          console.warn(`Failed to kill PID ${pid}: ${error.message}`);
+        }
+      });
+    }
+  } catch (error) {
+    if (error.status === 1) {
+      // No process was using the port
+      return;
+    }
+    console.warn(`Unable to inspect port ${port}: ${error.message}`);
+  }
 }
 
 function createWindow() {
@@ -102,6 +172,42 @@ ipcMain.handle('delete-credentials', async () => {
   }
 });
 
+ipcMain.handle('save-ai-key', async (event, apiKey) => {
+  try {
+    const encrypted = safeStorage.encryptString(apiKey);
+    fs.writeFileSync(aiKeyPath, encrypted);
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving AI key:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-ai-key', async () => {
+  try {
+    if (!fs.existsSync(aiKeyPath)) {
+      return null;
+    }
+    const encrypted = fs.readFileSync(aiKeyPath);
+    return safeStorage.decryptString(encrypted);
+  } catch (error) {
+    console.error('Error reading AI key:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('delete-ai-key', async () => {
+  try {
+    if (fs.existsSync(aiKeyPath)) {
+      fs.unlinkSync(aiKeyPath);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting AI key:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 app.whenReady().then(() => {
   // Start backend server
   startBackend();
@@ -130,4 +236,3 @@ app.on('quit', () => {
     backendProcess.kill();
   }
 });
-

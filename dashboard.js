@@ -1,6 +1,30 @@
 // Dashboard logic for Auxa
 
 let userCredentials = null;
+const TEXT_FILE_EXTENSIONS = [
+  'txt', 'md', 'json', 'py', 'js', 'ts', 'jsx', 'tsx',
+  'go', 'c', 'cpp', 'h', 'hpp', 'java', 'cs', 'php',
+  'rb', 'rs', 'swift', 'kt', 'scala', 'r', 'sh', 'bash',
+  'sql', 'html', 'css', 'scss', 'xml', 'yaml', 'yml',
+  'csv', 'tex'
+];
+const IMAGE_FILE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff'];
+const DOCUMENT_OCR_PAGE_LIMIT = 5;
+const DOCX_OCR_IMAGE_LIMIT = 5;
+const OCR_CHARACTER_LIMIT = 6000;
+const VISION_MODEL_KEYWORDS = ['gpt-4o', 'gpt-4.1', 'gpt-5'];
+const VISION_MAX_ANALYSES_PER_SUBMISSION = 3;
+const OCR_TEXT_HEAVY_THRESHOLD = 220;
+const OCR_TEXT_MIN_THRESHOLD = 40;
+const EDGE_DENSITY_VISION_THRESHOLD = 0.12;
+const COLOR_DIVERSITY_THRESHOLD = 45;
+const VISION_IMAGE_MAX_DIMENSION = 768;
+const TESSERACT_RESOURCES = {
+  workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
+  langPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/languages/',
+  corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/dist/tesseract-core.wasm.js'
+};
+let ocrWorkerPromise = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Check if user is logged in
@@ -16,7 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initNavigation();
   
   // Initialize settings
-  initSettings();
+  await initSettings();
   
   // Initialize rubrics
   initRubrics();
@@ -52,7 +76,7 @@ function initNavigation() {
 }
 
 // Initialize settings view
-function initSettings() {
+async function initSettings() {
   document.getElementById('settings-token').value = userCredentials.token ? '••••••••••••••••' : '';
   document.getElementById('settings-school').value = userCredentials.school || '';
   
@@ -65,46 +89,49 @@ function initSettings() {
   });
   
   // AI Platform settings
-  initAISettings();
+  await initAISettings();
 }
 
 // Model options for each platform
 const AI_MODELS = {
   openai: {
     text: [
-      { value: 'gpt-4o', label: 'GPT-4o (Recommended)' },
-      { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Faster)' },
-      { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-      { value: 'gpt-4', label: 'GPT-4' },
-      { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' }
+      { value: 'gpt-5', label: 'GPT-5 (gpt-5) (Recommended)' },
+      { value: 'gpt-5-mini', label: 'GPT-5 Mini (gpt-5-mini)' },
+      { value: 'gpt-5-nano', label: 'GPT-5 Nano (gpt-5-nano)' },
+      { value: 'gpt-4.1', label: 'GPT-4.1 (gpt-4.1)' },
+      { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini (gpt-4.1-mini) (Cheapest)' },
+      { value: 'gpt-4o', label: 'GPT-4o (gpt-4o) (Recommended)' },
+      { value: 'gpt-4o-mini', label: 'GPT-4o Mini (gpt-4o-mini)' }
     ],
     audio: [
-      { value: 'whisper-1', label: 'Whisper v3' }
+      { value: 'gpt-4o-transcribe', label: 'GPT-4o Transcribe (gpt-4o-transcribe)' },
+      { value: 'gpt-4o-mini-transcribe', label: 'GPT-4o Mini Transcribe (gpt-4o-mini-transcribe)' }
     ]
   },
   anthropic: {
     text: [
-      { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (Recommended)' },
-      { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku (Faster)' },
-      { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' }
+      { value: 'claude-sonnet-4-5-20250929', label: 'Sonnet 4.5 (claude-sonnet-4-5-20250929) (Recommended)' },
+      { value: 'claude-opus-4-1-20250805', label: 'Opus 4.1 (claude-opus-4-1-20250805)' },
+      { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5 (claude-haiku-4-5-20251001) (Cheapest)' }
     ],
     audio: [] // Anthropic doesn't support audio
   },
   google: {
     text: [
-      { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Recommended)' },
-      { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Faster)' },
-      { value: 'gemini-1.0-pro', label: 'Gemini 1.0 Pro' }
+      { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (gemini-2.5-pro) (Recommended)' },
+      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (gemini-2.5-flash)' },
+      { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite (gemini-2.5-flash-lite) (Cheapest)' }
     ],
     audio: [
-      { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Native Audio)' },
-      { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Native Audio)' }
+      { value: 'gemini-2.5-pro-preview-tts', label: 'Gemini 2.5 Pro Preview TTS (gemini-2.5-pro-preview-tts)' },
+      { value: 'gemini-2.5-flash-preview-tts', label: 'Gemini 2.5 Flash Preview TTS (gemini-2.5-flash-preview-tts)' }
     ]
   }
 };
 
 // Initialize AI platform settings
-function initAISettings() {
+async function initAISettings() {
   const platformSelect = document.getElementById('ai-platform-select');
   const apiKeySection = document.getElementById('api-key-section');
   const apiKeyInput = document.getElementById('ai-api-key');
@@ -118,10 +145,36 @@ function initAISettings() {
   
   // Load saved AI settings
   const savedPlatform = localStorage.getItem('aiPlatform');
-  const savedApiKey = localStorage.getItem('aiApiKey');
   const savedTextModel = localStorage.getItem('aiTextModel');
   const savedAudioModel = localStorage.getItem('aiAudioModel');
   const savedSystemPrompt = localStorage.getItem('aiSystemPrompt');
+  let savedApiKey = null;
+
+  if (window.secureStorage && typeof window.secureStorage.getAIKey === 'function') {
+    try {
+      savedApiKey = await window.secureStorage.getAIKey();
+    } catch (error) {
+      console.error('Failed to load saved AI key:', error);
+      savedApiKey = null;
+    }
+  }
+
+  // Migrate legacy localStorage key if present and no secure key stored
+  if (!savedApiKey) {
+    const legacyKey = localStorage.getItem('aiApiKey');
+    if (legacyKey && window.secureStorage && typeof window.secureStorage.saveAIKey === 'function') {
+      try {
+        const result = await window.secureStorage.saveAIKey(legacyKey);
+        if (result && result.success) {
+          savedApiKey = legacyKey;
+        }
+      } catch (error) {
+        console.error('Failed to migrate legacy AI key to secure storage:', error);
+      } finally {
+        localStorage.removeItem('aiApiKey');
+      }
+    }
+  }
   
   if (savedPlatform) {
     platformSelect.value = savedPlatform;
@@ -147,6 +200,7 @@ function initAISettings() {
     if (savedApiKey) {
       apiKeyInput.value = '••••••••••••••••';
       apiKeyInput.setAttribute('data-has-key', 'true');
+      savedApiKey = null;
     }
     
     if (savedTextModel) {
@@ -235,6 +289,7 @@ function initAISettings() {
       localStorage.setItem('aiTextModel', textModel);
       localStorage.setItem('aiAudioModel', audioModel);
       localStorage.setItem('aiSystemPrompt', systemPrompt);
+      localStorage.removeItem('aiApiKey');
       return;
     }
     
@@ -249,12 +304,33 @@ function initAISettings() {
       return;
     }
     
-    // Save to localStorage (in production, use secure storage like Canvas credentials)
+    let saveResult = null;
+    let usedFallbackStorage = false;
+    if (window.secureStorage && typeof window.secureStorage.saveAIKey === 'function') {
+      try {
+        saveResult = await window.secureStorage.saveAIKey(apiKey);
+      } catch (error) {
+        console.error('Failed to save AI key securely:', error);
+        saveResult = { success: false, error: error.message };
+      }
+      if (!saveResult || saveResult.success === false) {
+        alert('Failed to save AI API key securely.' + (saveResult && saveResult.error ? `\nReason: ${saveResult.error}` : ''));
+        return;
+      }
+    } else {
+      // Fallback (should not happen in production)
+      localStorage.setItem('aiApiKey', apiKey);
+      usedFallbackStorage = true;
+    }
+    
+    // Save non-sensitive preferences
     localStorage.setItem('aiPlatform', platform);
-    localStorage.setItem('aiApiKey', apiKey);
     localStorage.setItem('aiTextModel', textModel);
     localStorage.setItem('aiAudioModel', audioModel);
     localStorage.setItem('aiSystemPrompt', systemPrompt);
+    if (!usedFallbackStorage) {
+      localStorage.removeItem('aiApiKey'); // Ensure plaintext key is cleared
+    }
     
     // Update UI
     apiKeyInput.value = '••••••••••••••••';
@@ -1086,7 +1162,7 @@ async function renderSubmissionFile(attachment, index) {
   
   try {
     // Fetch file content
-    const response = await fetch(fileUrl);
+    const response = await fetchCanvasFile(fileUrl);
     if (!response.ok) throw new Error('Failed to fetch file');
     
     // Route to appropriate renderer based on file type
@@ -1441,29 +1517,70 @@ function getMonacoLanguage(ext) {
 
 // Render image file
 async function renderImageFile(url, container) {
-  container.innerHTML = `
-    <div class="preview-container">
-      <div class="preview-image-content">
-        <img src="${url}" alt="Submitted image" />
+  try {
+    const response = await fetchCanvasFile(url);
+    if (!response.ok) throw new Error('Failed to fetch image');
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+
+    container.innerHTML = `
+      <div class="preview-container">
+        <div class="preview-image-content">
+          <img src="${objectUrl}" alt="Submitted image" />
+        </div>
       </div>
-    </div>
-  `;
+    `;
+
+    const img = container.querySelector('img');
+    if (img) {
+      img.onload = () => URL.revokeObjectURL(objectUrl);
+      img.onerror = () => URL.revokeObjectURL(objectUrl);
+    }
+  } catch (error) {
+    console.error('Failed to render submitted image:', error);
+    container.innerHTML = `
+      <div class="preview-container">
+        <p style="color: #f44336;">Unable to load submitted image.</p>
+      </div>
+    `;
+  }
 }
 
 // Render media file
 async function renderMediaFile(url, container, extension) {
   const isVideo = ['mp4', 'webm', 'mov', 'avi', 'mpeg'].includes(extension);
-  
-  container.innerHTML = `
-    <div class="preview-container">
-      <div class="preview-media-content">
-        ${isVideo ? 
-          `<video controls src="${url}" style="max-width: 100%; max-height: 600px;">Your browser does not support the video tag.</video>` :
-          `<audio controls src="${url}" style="width: 100%;">Your browser does not support the audio tag.</audio>`
-        }
+  try {
+    const response = await fetchCanvasFile(url);
+    if (!response.ok) throw new Error('Failed to fetch media');
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+
+    container.innerHTML = `
+      <div class="preview-container">
+        <div class="preview-media-content">
+          ${isVideo 
+            ? `<video controls src="${objectUrl}" style="max-width: 100%; max-height: 600px;">Your browser does not support the video tag.</video>`
+            : `<audio controls src="${objectUrl}" style="width: 100%;">Your browser does not support the audio tag.</audio>`
+          }
+        </div>
       </div>
-    </div>
-  `;
+    `;
+
+    const mediaEl = container.querySelector(isVideo ? 'video' : 'audio');
+    if (mediaEl) {
+      const revoke = () => URL.revokeObjectURL(objectUrl);
+      mediaEl.onloadeddata = revoke;
+      mediaEl.onerror = revoke;
+      mediaEl.onended = revoke;
+    }
+  } catch (error) {
+    console.error('Failed to render submitted media:', error);
+    container.innerHTML = `
+      <div class="preview-container">
+        <p style="color: #f44336;">Unable to load submitted media.</p>
+      </div>
+    `;
+  }
 }
 
 // Render PPTX placeholder
@@ -1509,7 +1626,7 @@ async function generateAIFeedback() {
   const generateBtn = document.getElementById('generate-ai-feedback-btn');
   
   // Check AI configuration
-  const aiConfig = getAIConfig();
+  const aiConfig = await getAIConfig();
   if (!aiConfig.platform || !aiConfig.apiKey) {
     alert('Please configure your AI platform and API key in Settings first.');
     return;
@@ -1527,20 +1644,23 @@ async function generateAIFeedback() {
   
   try {
     // Extract submission content
-    const submissionContent = await extractSubmissionContent();
+    const submissionContent = await extractSubmissionContent(aiConfig);
     
     // Get rubric content
     const rubricContent = getRubricContent();
     
-    // Build prompt
-    const prompt = buildGradingPrompt(submissionContent, rubricContent, aiConfig.systemPrompt);
+    // Build system prompt (default + custom + rubric)
+    const systemPrompt = buildSystemPrompt(aiConfig.systemPrompt, rubricContent);
+    
+    // Build user prompt with submission context
+    const prompt = buildGradingPrompt(submissionContent);
     
     // Call backend API to generate feedback
     const feedback = await callBackendLLM(
       aiConfig.platform, 
       prompt, 
       aiConfig.apiKey, 
-      aiConfig.systemPrompt,
+      systemPrompt,
       aiConfig.textModel,
       aiConfig.audioModel
     );
@@ -1553,7 +1673,7 @@ async function generateAIFeedback() {
     
   } catch (error) {
     console.error('Error generating AI feedback:', error);
-    feedbackTextarea.value = `Error generating feedback: ${error.message}\n\nPlease check your API key and try again.`;
+    feedbackTextarea.value = `Error generating feedback: ${error.message}`;
   } finally {
     // Re-enable button
     generateBtn.disabled = false;
@@ -1562,34 +1682,42 @@ async function generateAIFeedback() {
 }
 
 // Extract submission content based on type
-async function extractSubmissionContent() {
+async function extractSubmissionContent(aiConfig) {
   const submission = currentGradingContext.submission;
   let content = '';
+  const visionBudget = createVisionBudget(aiConfig);
   
   if (submission.submission_type === 'online_text_entry') {
     // Text submission
     content = `TEXT SUBMISSION:\n${submission.body || 'No content'}`;
   }
   else if (submission.submission_type === 'online_upload') {
-    // File uploads
     if (submission.attachments && submission.attachments.length > 0) {
-      content = 'SUBMITTED FILES:\n\n';
+      const fileSections = [];
+
       for (const file of submission.attachments) {
-        content += `File: ${file.filename}\n`;
-        content += `Type: ${file['content-type']}\n`;
-        content += `Size: ${formatFileSize(file.size)}\n`;
-        
-        // Try to fetch and include file content for text-based files
+        const sectionLines = [
+          `File: ${file.filename}`,
+          `Type: ${file['content-type']}`,
+          `Size: ${formatFileSize(file.size)}`
+        ];
+
         try {
-          const fileContent = await fetchFileContent(file.url, file.filename);
-          if (fileContent) {
-            content += `Content:\n${fileContent}\n`;
+          const extractedContent = await extractAttachmentContentForAI(file, aiConfig, visionBudget);
+          if (extractedContent) {
+            sectionLines.push(`Extracted Content:\n${extractedContent}`);
+          } else {
+            sectionLines.push('Extracted Content:\n(No extractable content detected)');
           }
         } catch (error) {
-          content += `(File content could not be extracted)\n`;
+          console.error('Failed to process attachment for AI prompt:', error);
+          sectionLines.push('Extracted Content:\n(Content could not be processed)');
         }
-        content += '\n---\n\n';
+
+        fileSections.push(sectionLines.join('\n'));
       }
+
+      content = `SUBMITTED FILES:\n\n${fileSections.join('\n\n---\n\n')}`;
     } else {
       content = 'No files attached';
     }
@@ -1603,23 +1731,26 @@ async function extractSubmissionContent() {
   else {
     content = `Submission type: ${submission.submission_type}`;
   }
+
+  if (visionBudget.enabled && visionBudget.used > 0) {
+    const uniqueSources = [...new Set(visionBudget.sources)];
+    const sources = uniqueSources.length > 0 ? uniqueSources.join(', ') : 'n/a';
+    const modelName = aiConfig && aiConfig.textModel ? aiConfig.textModel : 'selected vision model';
+    content += `\n\nVISION ANALYSIS SUMMARY:\n- Images analyzed with ${modelName}: ${visionBudget.used}\n- Sources: ${sources}`;
+  }
   
   return content;
 }
 
 // Fetch file content for text-based files
 async function fetchFileContent(url, filename) {
-  const extension = filename.split('.').pop().toLowerCase();
-  
-  // Only fetch content for text-based files
-  const textExtensions = ['txt', 'md', 'json', 'py', 'js', 'ts', 'jsx', 'tsx', 'go', 'c', 'cpp', 'h', 'hpp', 'java', 'cs', 'php', 'rb', 'rs', 'swift', 'kt', 'scala', 'r', 'sh', 'bash', 'sql', 'html', 'css', 'scss', 'xml', 'yaml', 'yml', 'csv', 'tex'];
-  
-  if (!textExtensions.includes(extension)) {
-    return null; // Don't fetch binary files
+  const extension = getFileExtension(filename);
+  if (!TEXT_FILE_EXTENSIONS.includes(extension)) {
+    return null;
   }
   
   try {
-    const response = await fetch(url);
+    const response = await fetchCanvasFile(url);
     if (!response.ok) return null;
     
     const text = await response.text();
@@ -1631,6 +1762,579 @@ async function fetchFileContent(url, filename) {
   } catch (error) {
     return null;
   }
+}
+
+async function extractAttachmentContentForAI(file, aiConfig, visionBudget) {
+  const extension = getFileExtension(file.filename);
+  const mimeType = file['content-type'] || '';
+
+  if (TEXT_FILE_EXTENSIONS.includes(extension)) {
+    const textContent = await fetchFileContent(file.url, file.filename);
+    return textContent ? `Text Content:\n${truncateForAI(textContent)}` : null;
+  }
+
+  if (extension === 'docx') {
+    return await extractDocxContentForAI(file.url, aiConfig, visionBudget);
+  }
+
+  if (extension === 'pdf') {
+    return await extractPdfContentForAI(file.url, aiConfig, visionBudget);
+  }
+
+  if (IMAGE_FILE_EXTENSIONS.includes(extension)) {
+    return await extractImageOCRContent(
+      file.url,
+      mimeType || `image/${extension}`,
+      aiConfig,
+      visionBudget,
+      file.filename
+    );
+  }
+
+  return null;
+}
+
+function getFileExtension(filename = '') {
+  const segments = filename.split('.');
+  if (segments.length < 2) return '';
+  return segments.pop().toLowerCase();
+}
+
+function createVisionBudget(aiConfig) {
+  const enabled = aiConfig &&
+    aiConfig.platform === 'openai' &&
+    !!aiConfig.apiKey &&
+    supportsVisionModel(aiConfig.textModel);
+
+  return {
+    enabled,
+    used: 0,
+    max: VISION_MAX_ANALYSES_PER_SUBMISSION,
+    sources: []
+  };
+}
+
+function supportsVisionModel(modelName) {
+  if (!modelName) return false;
+  const lower = modelName.toLowerCase();
+  return VISION_MODEL_KEYWORDS.some(keyword => lower.includes(keyword));
+}
+
+async function fetchCanvasFile(url, options = {}) {
+  const fetchOptions = { ...options };
+  const headers = new Headers(fetchOptions.headers || {});
+
+  if (userCredentials && userCredentials.token) {
+    const rawToken = userCredentials.token.trim();
+    if (rawToken) {
+      const bearerToken = rawToken.toLowerCase().startsWith('bearer ')
+        ? rawToken
+        : `Bearer ${rawToken}`;
+      headers.set('Authorization', bearerToken);
+    }
+  }
+
+  fetchOptions.headers = headers;
+  return fetch(url, fetchOptions);
+}
+
+async function extractDocxContentForAI(url, aiConfig, visionBudget) {
+  if (typeof mammoth === 'undefined') {
+    console.warn('Mammoth is not available for DOCX extraction.');
+    return null;
+  }
+
+  try {
+    const response = await fetchCanvasFile(url);
+    if (!response.ok) return null;
+    const arrayBuffer = await response.arrayBuffer();
+
+    const imageAnalyses = [];
+    let processedImages = 0;
+
+    const result = await mammoth.convertToHtml(
+      { arrayBuffer },
+      {
+        convertImage: mammoth.images.inline(async image => {
+          if (processedImages >= DOCX_OCR_IMAGE_LIMIT) {
+            return { src: '' };
+          }
+
+          processedImages += 1;
+          const contentType = image.contentType || 'image/png';
+          const base64 = await image.read('base64');
+          const dataUrl = `data:${contentType};base64,${base64}`;
+          const analysis = await processImageForAI({
+            dataUrl,
+            mimeType: contentType,
+            sourceLabel: `DOCX Embedded Image ${processedImages}`,
+            aiConfig,
+            visionBudget
+          });
+
+          if (analysis) {
+            imageAnalyses.push(analysis);
+          }
+
+          return { src: '' };
+        })
+      }
+    );
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(result.value, 'text/html');
+    const textContent = doc.body
+      ? doc.body.innerText.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+      : '';
+
+    const sections = [];
+    if (textContent) {
+      sections.push(`DOCX Text:\n${truncateForAI(textContent)}`);
+    }
+    if (imageAnalyses.length > 0) {
+      sections.push(imageAnalyses.join('\n\n'));
+    }
+
+    return sections.join('\n\n') || null;
+  } catch (error) {
+    console.error('Failed to extract DOCX content for AI:', error);
+    return null;
+  }
+}
+
+async function extractPdfContentForAI(url, aiConfig, visionBudget) {
+  if (typeof pdfjsLib === 'undefined') {
+    console.warn('pdfjsLib is not available for PDF extraction.');
+    return null;
+  }
+
+  try {
+    const response = await fetchCanvasFile(url);
+    if (!response.ok) return null;
+    const arrayBuffer = await response.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    const sections = [];
+    const pageLimit = Math.min(pdf.numPages, DOCUMENT_OCR_PAGE_LIMIT);
+
+    for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map(item => item.str).join(' ').replace(/\s+/g, ' ').trim();
+      if (pageText) {
+        sections.push(`PDF Page ${pageNumber} Text:\n${truncateForAI(pageText)}`);
+      }
+
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      await page.render({ canvasContext: context, viewport }).promise;
+      const dataUrl = canvas.toDataURL('image/png');
+      canvas.width = 0;
+      canvas.height = 0;
+
+      const analysis = await processImageForAI({
+        dataUrl,
+        mimeType: 'image/png',
+        sourceLabel: `PDF Page ${pageNumber}`,
+        aiConfig,
+        visionBudget,
+        forceVision: !pageText
+      });
+
+      if (analysis) {
+        sections.push(analysis);
+      }
+    }
+
+    if (pdf.numPages > pageLimit) {
+      sections.push(`Note: OCR limited to first ${pageLimit} pages out of ${pdf.numPages}.`);
+    }
+
+    return sections.join('\n\n') || null;
+  } catch (error) {
+    console.error('Failed to extract PDF content for AI:', error);
+    return null;
+  }
+}
+
+async function extractImageOCRContent(url, mimeType, aiConfig, visionBudget, sourceLabel) {
+  try {
+    const response = await fetchCanvasFile(url);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const dataUrl = await blobToDataUrl(blob);
+    const analysis = await processImageForAI({
+      dataUrl,
+      mimeType,
+      sourceLabel: sourceLabel || 'Image Attachment',
+      aiConfig,
+      visionBudget
+    });
+
+    if (analysis) {
+      return analysis;
+    }
+  } catch (error) {
+    console.error('Failed to perform OCR on image attachment:', error);
+  }
+
+  return null;
+}
+
+async function processImageForAI({
+  dataUrl,
+  mimeType,
+  sourceLabel,
+  aiConfig,
+  visionBudget,
+  forceVision = false
+}) {
+  if (!dataUrl) return null;
+
+  const ocrResult = await recognizeImageTextFromData(dataUrl);
+  const ocrText = (ocrResult.text || '').trim();
+  const normalizedMime = (mimeType || 'image/png').toLowerCase();
+  const label = sourceLabel || 'Image';
+  const sections = [];
+
+  const detection = await analyzeForVision({
+    dataUrl,
+    ocrText,
+    mimeType: normalizedMime,
+    forceVision
+  });
+
+  let visionAttempted = false;
+  let visionSuccessful = false;
+
+  const canUseVision = Boolean(
+    visionBudget &&
+    visionBudget.enabled &&
+    aiConfig &&
+    aiConfig.apiKey &&
+    aiConfig.platform === 'openai'
+  );
+
+  if (
+    canUseVision &&
+    visionBudget.used < visionBudget.max &&
+    (detection.shouldUseVision || forceVision)
+  ) {
+    const payloadDataUrl = detection.scaledDataUrl || dataUrl;
+    try {
+      visionBudget.used += 1;
+      visionAttempted = true;
+      const summary = await describeImageWithVision({
+        dataUrl: payloadDataUrl,
+        mimeType: detection.scaledMimeType || normalizedMime,
+        sourceLabel: label,
+        aiConfig
+      });
+
+      if (summary) {
+        visionSuccessful = true;
+        sections.push(`Vision Summary (${aiConfig.textModel}):\n${truncateForAI(summary, 1500)}`);
+        if (visionBudget.sources) {
+          visionBudget.sources.push(label);
+        }
+      } else {
+        sections.push('Vision Summary:\n(No description returned)');
+      }
+    } catch (error) {
+      console.error('Vision analysis failed:', error);
+      sections.push('Vision Summary:\n(Failed to analyse visual content)');
+    }
+  } else if ((detection.shouldUseVision || forceVision) && visionBudget) {
+    if (!visionBudget.enabled) {
+      sections.push('Vision Summary:\n(Skipped – current model does not support vision input)');
+    } else if (visionBudget.used >= visionBudget.max) {
+      sections.push('Vision Summary:\n(Skipped – vision analysis limit reached for this submission)');
+    }
+  }
+
+  if (ocrText) {
+    sections.push(`OCR Text:\n${truncateForAI(ocrText)}`);
+  } else if (!visionSuccessful) {
+    sections.push('OCR Text:\n(No text detected)');
+  }
+
+  if (detection.metrics && (detection.shouldUseVision || forceVision)) {
+    const edge = detection.metrics.edgeDensity.toFixed(2);
+    const palette = detection.metrics.colorDiversity;
+    sections.push(`Structure Check:\nDetected complex visual structure (edge density=${edge}, palette diversity=${palette})`);
+  }
+
+  if (sections.length === 0) {
+    return null;
+  }
+
+  const analysisLabel = label.toLowerCase().includes('image') ? label : `Image - ${label}`;
+  return `${analysisLabel} Analysis:\n${sections.join('\n\n')}`;
+}
+
+function buildVisionPrompt(sourceLabel) {
+  const label = sourceLabel || 'image';
+  return (
+    `You are assisting a teaching assistant with grading a student submission. ` +
+    `Describe the important visual elements in the provided ${label}. ` +
+    `Focus on structure, relationships, labels, and any notable details that matter when grading. ` +
+    `Respond with 2-3 concise bullet points.`
+  );
+}
+
+async function describeImageWithVision({ dataUrl, mimeType, sourceLabel, aiConfig }) {
+  if (!aiConfig || aiConfig.platform !== 'openai' || !aiConfig.apiKey) {
+    return null;
+  }
+
+  const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+  if (!base64) {
+    throw new Error('Invalid image payload for vision analysis');
+  }
+
+  const body = {
+    platform: aiConfig.platform,
+    api_key: aiConfig.apiKey,
+    model: aiConfig.textModel,
+    prompt: buildVisionPrompt(sourceLabel),
+    mime_type: mimeType || 'image/png',
+    image_base64: base64,
+    max_tokens: 480,
+    temperature: 0.2
+  };
+
+  const response = await fetch('http://localhost:3000/api/llm/analyze-image', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    let message = 'Vision analysis request failed';
+    try {
+      const errorBody = await response.json();
+      if (errorBody && errorBody.error) {
+        message = errorBody.error;
+      }
+    } catch (parseError) {
+      // Ignore parse errors and use default message
+    }
+    throw new Error(message);
+  }
+
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(data.error);
+  }
+
+  return data.summary || '';
+}
+
+async function analyzeForVision({ dataUrl, ocrText, mimeType, forceVision }) {
+  const metricsData = await analyzeImageStructure(dataUrl);
+  const cleanText = (ocrText || '').replace(/\s+/g, ' ').trim();
+  const textLength = cleanText.length;
+
+  const shouldUseVision = shouldTriggerVision(
+    textLength,
+    metricsData,
+    Boolean(forceVision)
+  );
+
+  return {
+    shouldUseVision,
+    metrics: metricsData
+      ? {
+          edgeDensity: metricsData.edgeDensity,
+          colorDiversity: metricsData.colorDiversity
+        }
+      : null,
+    scaledDataUrl: metricsData ? metricsData.scaledDataUrl : null,
+    scaledMimeType: metricsData ? metricsData.scaledMimeType : mimeType || 'image/png',
+    textLength
+  };
+}
+
+function shouldTriggerVision(textLength, metricsData, forceVision) {
+  if (forceVision) return true;
+  if (textLength >= OCR_TEXT_HEAVY_THRESHOLD) return false;
+  if (!metricsData) return textLength <= OCR_TEXT_MIN_THRESHOLD;
+
+  if (textLength <= OCR_TEXT_MIN_THRESHOLD) return true;
+
+  const edgeDensity = metricsData.edgeDensity || 0;
+  const colorDiversity = metricsData.colorDiversity || 0;
+  return edgeDensity >= EDGE_DENSITY_VISION_THRESHOLD ||
+    colorDiversity >= COLOR_DIVERSITY_THRESHOLD;
+}
+
+async function analyzeImageStructure(dataUrl) {
+  try {
+    const img = await loadImageElement(dataUrl);
+    if (!img) return null;
+
+    let { width, height } = img;
+    if (!width || !height) return null;
+
+    const maxSide = Math.max(width, height);
+    const scale = maxSide > VISION_IMAGE_MAX_DIMENSION
+      ? VISION_IMAGE_MAX_DIMENSION / maxSide
+      : 1;
+
+    const scaledWidth = Math.max(1, Math.round(width * scale));
+    const scaledHeight = Math.max(1, Math.round(height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = scaledWidth;
+    canvas.height = scaledHeight;
+
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+
+    const imageData = ctx.getImageData(0, 0, scaledWidth, scaledHeight);
+    const edgeDensity = computeEdgeDensity(imageData.data, scaledWidth, scaledHeight);
+    const colorDiversity = computeColorDiversity(imageData.data);
+    const scaledDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+
+    canvas.width = 0;
+    canvas.height = 0;
+
+    return {
+      edgeDensity,
+      colorDiversity,
+      scaledDataUrl,
+      scaledMimeType: 'image/jpeg'
+    };
+  } catch (error) {
+    console.warn('Failed to analyse image structure:', error);
+    return null;
+  }
+}
+
+function loadImageElement(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+function computeEdgeDensity(data, width, height) {
+  const stride = Math.max(1, Math.floor(Math.max(width, height) / 256));
+  let edges = 0;
+  let samples = 0;
+  const threshold = 80;
+
+  for (let y = 0; y < height - stride; y += stride) {
+    for (let x = 0; x < width - stride; x += stride) {
+      const idx = (y * width + x) * 4;
+      const rightIdx = (y * width + (x + stride)) * 4;
+      const downIdx = ((y + stride) * width + x) * 4;
+
+      const gray = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+      const grayRight = 0.299 * data[rightIdx] + 0.587 * data[rightIdx + 1] + 0.114 * data[rightIdx + 2];
+      const grayDown = 0.299 * data[downIdx] + 0.587 * data[downIdx + 1] + 0.114 * data[downIdx + 2];
+
+      const gradient = Math.abs(gray - grayRight) + Math.abs(gray - grayDown);
+      if (gradient > threshold) {
+        edges += 1;
+      }
+      samples += 1;
+    }
+  }
+
+  if (samples === 0) return 0;
+  return edges / samples;
+}
+
+function computeColorDiversity(data) {
+  const palette = new Set();
+  const sampleStride = 4 * 8; // Skip pixels for a faster estimate
+
+  for (let i = 0; i < data.length; i += sampleStride) {
+    const r = data[i] >> 5;
+    const g = data[i + 1] >> 5;
+    const b = data[i + 2] >> 5;
+    const key = (r << 10) | (g << 5) | b;
+    palette.add(key);
+  }
+
+  return palette.size;
+}
+
+async function recognizeImageTextFromData(dataUrl) {
+  if (!dataUrl) {
+    return { text: '', confidence: null };
+  }
+
+  const worker = await ensureOCRWorker();
+  if (!worker) {
+    ocrWorkerPromise = null;
+    return { text: '', confidence: null };
+  }
+
+  try {
+    const { data } = await worker.recognize(dataUrl);
+    const text = data && data.text ? data.text : '';
+    const confidence = data && typeof data.confidence === 'number' ? data.confidence : null;
+    return { text, confidence };
+  } catch (error) {
+    console.error('OCR recognition failed:', error);
+    return { text: '', confidence: null };
+  }
+}
+
+async function ensureOCRWorker() {
+  if (typeof Tesseract === 'undefined') {
+    console.warn('Tesseract.js is not available for OCR.');
+    return null;
+  }
+
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = (async () => {
+      try {
+        const worker = await Tesseract.createWorker({
+          workerPath: TESSERACT_RESOURCES.workerPath,
+          langPath: TESSERACT_RESOURCES.langPath,
+          corePath: TESSERACT_RESOURCES.corePath
+        });
+
+        await worker.load();
+        await worker.loadLanguage('eng');
+        await worker.initialize('eng');
+        return worker;
+      } catch (error) {
+        console.error('Failed to initialise Tesseract worker:', error);
+        return null;
+      }
+    })();
+  }
+
+  return ocrWorkerPromise;
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function truncateForAI(text, limit = OCR_CHARACTER_LIMIT) {
+  if (!text) return text;
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit)}\n... (content truncated)`;
 }
 
 // Get rubric content
@@ -1645,34 +2349,24 @@ function getRubricContent() {
   return null;
 }
 
-// Build grading prompt
-function buildGradingPrompt(submissionContent, rubricContent, customSystemPrompt) {
+// Build grading prompt (user content)
+function buildGradingPrompt(submissionContent) {
   let prompt = '';
-  
-  // Add custom system prompt if provided
-  if (customSystemPrompt) {
-    prompt += `GRADING INSTRUCTIONS:\n${customSystemPrompt}\n\n`;
-  }
-  
-  // Add rubric if available
-  if (rubricContent) {
-    prompt += `GRADING RUBRIC:\n${rubricContent}\n\n`;
-  }
-  
+
   // Add assignment context
   const assignment = currentGradingContext.assignment;
   const submission = currentGradingContext.submission;
-  
+
   prompt += `ASSIGNMENT INFORMATION:\n`;
   prompt += `Assignment: ${assignment.name}\n`;
   prompt += `Maximum Points: ${assignment.points_possible}\n`;
   prompt += `Student: ${submission.user ? submission.user.name : 'Unknown'}\n`;
   prompt += `Submission Date: ${submission.submitted_at ? new Date(submission.submitted_at).toLocaleString() : 'Not submitted'}\n`;
   prompt += `Late: ${submission.late ? 'Yes' : 'No'}\n\n`;
-  
+
   // Add submission content
   prompt += `STUDENT SUBMISSION:\n${submissionContent}\n\n`;
-  
+
   // Add grading instructions
   prompt += `Please review this student submission and provide:\n`;
   prompt += `1. Detailed feedback on the work\n`;
@@ -1682,6 +2376,30 @@ function buildGradingPrompt(submissionContent, rubricContent, customSystemPrompt
   prompt += `Format your response as:\nFEEDBACK: [your detailed feedback]\nSUGGESTED GRADE: [number]/[max points]`;
   
   return prompt;
+}
+
+// Build system prompt combining defaults, custom guidance, and rubric
+function buildSystemPrompt(customSystemPrompt, rubricContent) {
+  const sections = [];
+  const assignment = currentGradingContext.assignment;
+
+  if (assignment && typeof assignment.points_possible === 'number') {
+    sections.push(`Maximum Points: ${assignment.points_possible}`);
+  }
+
+  if (customSystemPrompt) {
+    sections.push(`Instructor Custom Guidance:\n${customSystemPrompt}`);
+  }
+
+  if (rubricContent) {
+    sections.push(`Grading Rubric:\n${rubricContent}`);
+  }
+
+  sections.push(
+    'Always identify strengths, areas for improvement, and reference rubric criteria in your feedback.'
+  );
+
+  return sections.join('\n\n');
 }
 
 // Call backend LLM API
@@ -1698,8 +2416,8 @@ async function callBackendLLM(platform, prompt, apiKey, systemPrompt, textModel,
       system_prompt: systemPrompt || '',
       text_model: textModel,
       audio_model: audioModel || '',
-      temperature: 0.7,
-      max_tokens: 2000
+      temperature: 1,
+      max_tokens: 6000
     })
   });
   
@@ -1757,6 +2475,11 @@ async function viewSubmissionDetails(submission, courseId) {
   try {
     // Get student details from submission
     const student = submission.user;
+    const formattedSubmissionType = formatSubmissionDetailType(submission.submission_type);
+    const formattedSubmittedAt = formatSubmissionTimestamp(submission.submitted_at);
+    const formattedStatus = formatSubmissionStatus(submission.workflow_state);
+    const formattedGrade = submission.grade ? submission.grade : 'Not graded';
+    const formattedScore = submission.score !== null && submission.score !== undefined ? submission.score : '0';
     
     // Fetch course enrollments
     const enrollments = await fetchCourseEnrollments(courseId);
@@ -1790,15 +2513,15 @@ async function viewSubmissionDetails(submission, courseId) {
         <h3>Submission Information</h3>
         <div class="student-info-row">
           <span class="student-info-label">Type:</span>
-          <span class="student-info-value">${submission.submission_type || 'N/A'}</span>
+          <span class="student-info-value">${formattedSubmissionType}</span>
         </div>
         <div class="student-info-row">
           <span class="student-info-label">Submitted At:</span>
-          <span class="student-info-value">${submission.submitted_at ? new Date(submission.submitted_at).toLocaleString() : 'Not submitted'}</span>
+          <span class="student-info-value">${formattedSubmittedAt}</span>
         </div>
         <div class="student-info-row">
           <span class="student-info-label">Status:</span>
-          <span class="student-info-value">${submission.workflow_state || 'N/A'}</span>
+          <span class="student-info-value">${formattedStatus}</span>
         </div>
         <div class="student-info-row">
           <span class="student-info-label">Late:</span>
@@ -1806,11 +2529,11 @@ async function viewSubmissionDetails(submission, courseId) {
         </div>
         <div class="student-info-row">
           <span class="student-info-label">Current Grade:</span>
-          <span class="student-info-value">${submission.grade || 'Not graded'}</span>
+          <span class="student-info-value">${formattedGrade}</span>
         </div>
         <div class="student-info-row">
           <span class="student-info-label">Score:</span>
-          <span class="student-info-value">${submission.score || '0'}</span>
+          <span class="student-info-value">${formattedScore}</span>
         </div>
       </div>
     `;
@@ -1823,10 +2546,6 @@ async function viewSubmissionDetails(submission, courseId) {
           <div class="student-info-row">
             <span class="student-info-label">Current Grade:</span>
             <span class="student-info-value">${studentEnrollment.grades.current_grade || 'N/A'} (${studentEnrollment.grades.current_score || 0}%)</span>
-          </div>
-          <div class="student-info-row">
-            <span class="student-info-label">Final Grade:</span>
-            <span class="student-info-value">${studentEnrollment.grades.final_grade || 'N/A'} (${studentEnrollment.grades.final_score || 0}%)</span>
           </div>
         </div>
       `;
@@ -1843,6 +2562,53 @@ async function viewSubmissionDetails(submission, courseId) {
       </div>
     `;
   }
+}
+
+function formatSubmissionDetailType(type) {
+  if (!type) return 'N/A';
+  const mapping = {
+    online_text_entry: 'Online Text Entry',
+    online_upload: 'Online Upload',
+    online_url: 'Online URL',
+    discussion_topic: 'Discussion Topic',
+    external_tool: 'External Tool',
+    quiz: 'Quiz'
+  };
+  if (mapping[type]) {
+    return mapping[type];
+  }
+
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function formatSubmissionStatus(status) {
+  if (!status) return 'N/A';
+  return status
+    .replace(/_/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function formatSubmissionTimestamp(timestamp) {
+  if (!timestamp) return 'Not submitted';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return 'Not submitted';
+
+  const day = date.getDate();
+  const month = date.toLocaleString('en-US', { month: 'long' });
+  const year = date.getFullYear();
+  const time = date.toLocaleString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  });
+
+  return `${day} ${month} ${year}, ${time}`;
 }
 
 // Fetch course enrollments
@@ -1878,10 +2644,28 @@ function getSystemPrompt() {
 }
 
 // Get AI configuration
-function getAIConfig() {
+async function getAIConfig() {
+  let apiKey = null;
+
+  if (window.secureStorage && typeof window.secureStorage.getAIKey === 'function') {
+    try {
+      apiKey = await window.secureStorage.getAIKey();
+      if (apiKey) {
+        localStorage.removeItem('aiApiKey');
+      }
+    } catch (error) {
+      console.error('Failed to retrieve AI key from secure storage:', error);
+      apiKey = null;
+    }
+  }
+
+  if (!apiKey) {
+    apiKey = localStorage.getItem('aiApiKey');
+  }
+
   return {
     platform: localStorage.getItem('aiPlatform') || null,
-    apiKey: localStorage.getItem('aiApiKey') || null,
+    apiKey: apiKey || null,
     textModel: localStorage.getItem('aiTextModel') || null,
     audioModel: localStorage.getItem('aiAudioModel') || null,
     systemPrompt: localStorage.getItem('aiSystemPrompt') || ''
@@ -2455,4 +3239,3 @@ function deleteRubric(rubricId) {
   
   alert('Rubric deleted successfully!');
 }
-

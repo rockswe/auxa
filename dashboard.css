@@ -763,6 +763,13 @@ body {
   color: #0c5460;
 }
 
+.info-note {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #0c5460;
+  line-height: 1.5;
+}
+
 .info-box strong {
   display: block;
   font-size: 15px;
@@ -1661,4 +1668,3 @@ body {
     max-height: 50vh;
   }
 }
-

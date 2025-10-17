@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"auxa/canvas"
 	"auxa/llm"
@@ -12,7 +13,10 @@ import (
 )
 
 func main() {
-	router := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
+
+	router := gin.New()
+	router.Use(gin.Recovery())
 
 	// Enable CORS for Electron app
 	router.Use(cors.New(cors.Config{
@@ -40,9 +44,10 @@ func main() {
 
 		// LLM API routes
 		api.POST("/llm/generate-feedback", generateAIFeedback)
+		api.POST("/llm/analyze-image", analyzeImageVisual)
 	}
 
-	log.Println("Server starting on http://localhost:3000")
+	log.Println(`Starting backend server with "go run main.go"`)
 	if err := router.Run(":3000"); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
@@ -191,6 +196,42 @@ func generateAIFeedback(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":    err.Error(),
 			"feedback": "",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// Analyze visual content with vision-capable LLM
+func analyzeImageVisual(c *gin.Context) {
+	var req llm.VisionAnalysisRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Platform == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Platform is required"})
+		return
+	}
+
+	if req.APIKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "API key is required"})
+		return
+	}
+
+	if strings.TrimSpace(req.ImageBase64) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Image data is required"})
+		return
+	}
+
+	response, err := llm.AnalyzeImage(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   err.Error(),
+			"summary": "",
 		})
 		return
 	}

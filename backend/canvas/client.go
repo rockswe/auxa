@@ -162,13 +162,16 @@ func (c *Client) GetUngradedSubmissions(courseID, assignmentID string) ([]Submis
 	// Initialize as empty slice to ensure JSON returns [] instead of null
 	ungradedSubmissions := make([]Submission, 0)
 	for _, submission := range allSubmissions {
-		// Check if submission is ungraded
-		// Ungraded: grader_id is null/0, no grade posted, and workflow_state is "submitted"
-		if submission.WorkflowState == "submitted" &&
-			(submission.GraderID == 0 || submission.GraderID == -1) &&
-			submission.Grade == "" &&
-			submission.Score == 0 {
+		// Treat any submitted or pending review attempt as ungraded regardless of lingering grade metadata
+		if submission.SubmittedAt != nil && (submission.WorkflowState == "submitted" || submission.WorkflowState == "pending_review") {
 			ungradedSubmissions = append(ungradedSubmissions, submission)
+			continue
+		}
+
+		// Fallback: if Canvas returns a custom state, include submissions that were turned in but not marked graded
+		if submission.SubmittedAt != nil && submission.WorkflowState != "graded" && submission.GradedAt == nil {
+			ungradedSubmissions = append(ungradedSubmissions, submission)
+			continue
 		}
 	}
 
@@ -218,29 +221,20 @@ func (c *Client) GetCoursesWithUngradedCount() ([]CourseWithStats, error) {
 
 // GetCourseEnrollments fetches active student enrollments for a course
 func (c *Client) GetCourseEnrollments(courseID string) ([]Enrollment, error) {
-	url := fmt.Sprintf("%s/api/v1/courses/%s/enrollments?type[]=StudentEnrollment&state[]=active&include[]=avatar_url&per_page=100", c.BaseURL, courseID)
+	endpoint := fmt.Sprintf("/courses/%s/enrollments", courseID)
+	params := url.Values{}
+	params.Add("type[]", "StudentEnrollment")
+	params.Add("state[]", "active")
+	params.Add("include[]", "avatar_url")
+	params.Add("per_page", "100")
 
-	req, err := http.NewRequest("GET", url, nil)
+	body, err := c.makeRequest("GET", endpoint, params)
 	if err != nil {
 		return nil, err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+c.Token)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("canvas API error: %s - %s", resp.Status, string(body))
 	}
 
 	var enrollments []Enrollment
-	if err := json.NewDecoder(resp.Body).Decode(&enrollments); err != nil {
+	if err := json.Unmarshal(body, &enrollments); err != nil {
 		return nil, err
 	}
 

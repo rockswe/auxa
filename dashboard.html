@@ -24,6 +24,9 @@
   <!-- Monaco Editor for Code -->
   <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css">
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+
+  <!-- Tesseract.js for OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   
   <!-- Mammoth for DOCX -->
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
@@ -231,6 +234,10 @@
                   <li><strong>Images:</strong> .PNG, .JPG, .JPEG, .GIF, .WEBP</li>
                   <li><strong>Audio/Video:</strong> .MP3, .MP4, .MPEG, .MPGA, .M4A, .WAV, .WEBM (via Whisper API)</li>
                 </ul>
+                <p class="info-note">
+                  Vision boost: Auxa automatically detects when screenshots contain diagrams or other visual context.
+                  With GPT-4o/GPT-5 models, those visuals are summarised via the model; otherwise, we fall back to fast local OCR.
+                </p>
               </div>
 
               <div id="google-info" class="info-box" style="display: none;">
@@ -367,4 +374,3 @@ Example: 'Be encouraging in your feedback. Focus on helping students learn rathe
   <script src="dashboard.js"></script>
 </body>
 </html>
-
